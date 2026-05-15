@@ -50,7 +50,7 @@ def run(dry_run=False):
         xml_files = download_session_zip(zip_url)
         print(f"  {len(xml_files)} vote files found.")
 
-        session_id = insert_session(conn, session_num, session_date)
+        session_id = insert_session(conn, session_num, session_date, zip_url=zip_url)
 
         for filename, xml_str in xml_files:
             try:
@@ -84,6 +84,7 @@ def run(dry_run=False):
                 "titulo": row["titulo"],
                 "texto_expediente": row["texto_expediente"],
                 "fecha": row["fecha"],
+                "zip_url": row["zip_url"],
                 "group_votes": {
                     g["grupo_code"]: {
                         "voto": g["voto"],

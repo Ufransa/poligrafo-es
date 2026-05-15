@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     id INTEGER PRIMARY KEY,
     session_number INTEGER UNIQUE,
     session_date TEXT,
+    zip_url TEXT,
     processed_at TEXT
 );
 
@@ -94,10 +95,10 @@ def get_last_session_number(conn):
     return row[0] or 0
 
 
-def insert_session(conn, session_number, session_date):
+def insert_session(conn, session_number, session_date, zip_url=None):
     conn.execute(
-        "INSERT OR IGNORE INTO sessions (session_number, session_date, processed_at) VALUES (?,?,?)",
-        (session_number, session_date, datetime.now(timezone.utc).isoformat())
+        "INSERT OR IGNORE INTO sessions (session_number, session_date, zip_url, processed_at) VALUES (?,?,?,?)",
+        (session_number, session_date, zip_url, datetime.now(timezone.utc).isoformat())
     )
     conn.commit()
     row = conn.execute("SELECT id FROM sessions WHERE session_number=?", (session_number,)).fetchone()
@@ -128,7 +129,7 @@ def insert_vote_groups(conn, vote_id, group_votes):
 
 def get_unpublished_votes(conn):
     return conn.execute(
-        """SELECT v.*, s.session_number
+        """SELECT v.*, s.session_number, s.zip_url
            FROM votes v
            JOIN sessions s ON v.session_id = s.id
            WHERE v.published = 0
