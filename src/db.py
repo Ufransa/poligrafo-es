@@ -1,0 +1,149 @@
+import sqlite3
+import json
+from pathlib import Path
+from datetime import datetime, timezone
+
+DEFAULT_DB = Path(__file__).parent.parent / "poligrafo.db"
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS sessions (
+    id INTEGER PRIMARY KEY,
+    session_number INTEGER UNIQUE,
+    session_date TEXT,
+    processed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS votes (
+    id INTEGER PRIMARY KEY,
+    session_id INTEGER REFERENCES sessions(id),
+    vote_number INTEGER,
+    titulo TEXT,
+    texto_expediente TEXT,
+    fecha TEXT,
+    categories TEXT DEFAULT '[]',
+    published INTEGER DEFAULT 0,
+    UNIQUE(session_id, vote_number)
+);
+
+CREATE TABLE IF NOT EXISTS vote_groups (
+    id INTEGER PRIMARY KEY,
+    vote_id INTEGER REFERENCES votes(id),
+    grupo_code TEXT,
+    voto TEXT,
+    total_diputados INTEGER,
+    divided INTEGER DEFAULT 0,
+    UNIQUE(vote_id, grupo_code)
+);
+
+CREATE TABLE IF NOT EXISTS boe_entries (
+    id INTEGER PRIMARY KEY,
+    identificador TEXT UNIQUE,
+    titulo TEXT,
+    rango TEXT,
+    departamento TEXT,
+    fecha TEXT,
+    url_xml TEXT,
+    categories TEXT DEFAULT '[]',
+    texto_preview TEXT,
+    published INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS program_chunks (
+    id INTEGER PRIMARY KEY,
+    party TEXT,
+    category TEXT,
+    page_start INTEGER,
+    text TEXT
+);
+
+CREATE TABLE IF NOT EXISTS vote_program_matches (
+    vote_id INTEGER REFERENCES votes(id),
+    chunk_id INTEGER REFERENCES program_chunks(id),
+    party TEXT,
+    score REAL
+);
+
+CREATE TABLE IF NOT EXISTS published_messages (
+    id INTEGER PRIMARY KEY,
+    type TEXT,
+    ref_id INTEGER,
+    telegram_message_id INTEGER,
+    sent_at TEXT
+);
+"""
+
+
+def init_db(db_path=DEFAULT_DB):
+    conn = sqlite3.connect(str(db_path))
+    conn.executescript(SCHEMA)
+    conn.commit()
+    conn.close()
+
+
+def get_conn(db_path=DEFAULT_DB):
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def get_last_session_number(conn):
+    row = conn.execute("SELECT MAX(session_number) FROM sessions").fetchone()
+    return row[0] or 0
+
+
+def insert_session(conn, session_number, session_date):
+    conn.execute(
+        "INSERT OR IGNORE INTO sessions (session_number, session_date, processed_at) VALUES (?,?,?)",
+        (session_number, session_date, datetime.now(timezone.utc).isoformat())
+    )
+    conn.commit()
+    row = conn.execute("SELECT id FROM sessions WHERE session_number=?", (session_number,)).fetchone()
+    return row["id"]
+
+
+def insert_vote(conn, session_id, vote_number, titulo, texto_expediente, fecha, categories=None):
+    conn.execute(
+        "INSERT OR IGNORE INTO votes (session_id, vote_number, titulo, texto_expediente, fecha, categories) VALUES (?,?,?,?,?,?)",
+        (session_id, vote_number, titulo, texto_expediente, fecha, json.dumps(categories or []))
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT id FROM votes WHERE session_id=? AND vote_number=?", (session_id, vote_number)
+    ).fetchone()
+    return row["id"]
+
+
+def insert_vote_groups(conn, vote_id, group_votes):
+    """group_votes: {code: {'voto': str, 'total': int, 'divided': bool}}"""
+    for code, data in group_votes.items():
+        conn.execute(
+            "INSERT OR REPLACE INTO vote_groups (vote_id, grupo_code, voto, total_diputados, divided) VALUES (?,?,?,?,?)",
+            (vote_id, code, data["voto"], data.get("total", 0), int(data.get("divided", False)))
+        )
+    conn.commit()
+
+
+def get_unpublished_votes(conn):
+    return conn.execute(
+        """SELECT v.*, s.session_number
+           FROM votes v
+           JOIN sessions s ON v.session_id = s.id
+           WHERE v.published = 0
+           ORDER BY s.session_number, v.vote_number"""
+    ).fetchall()
+
+
+def get_vote_groups(conn, vote_id):
+    return conn.execute(
+        "SELECT grupo_code, voto, total_diputados, divided FROM vote_groups WHERE vote_id=?",
+        (vote_id,)
+    ).fetchall()
+
+
+def mark_vote_published(conn, vote_id, telegram_message_id):
+    conn.execute("UPDATE votes SET published=1 WHERE id=?", (vote_id,))
+    conn.execute(
+        "INSERT INTO published_messages (type, ref_id, telegram_message_id, sent_at) VALUES ('vote_alert',?,?,?)",
+        (vote_id, telegram_message_id, datetime.now(timezone.utc).isoformat())
+    )
+    conn.commit()
