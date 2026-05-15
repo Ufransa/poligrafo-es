@@ -42,8 +42,7 @@ def format_vote_alert(vote, parties):
     lines.append("")
     lines.append(f"📅 {vote['fecha']}")
 
-    if vote.get("zip_url"):
-        lines.append(f'🔗 <a href="{vote["zip_url"]}">Ver sesión en Congreso</a>')
+    lines.append('🔗 <a href="https://www.congreso.es/es/opendata/votaciones">Fuente: Congreso opendata</a>')
 
     text = "\n".join(lines)
 
