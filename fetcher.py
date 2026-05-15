@@ -106,7 +106,7 @@ def run(dry_run=False):
             msg_id = send_message(TOKEN, CHANNEL, text)
             if msg_id:
                 mark_vote_published(conn, vote_id, telegram_message_id=msg_id)
-                print(f"  Published vote {vote_data['numero_votacion']} → Telegram msg {msg_id}")
+                print(f"  Published vote {vote_data['numero_votacion']} -> Telegram msg {msg_id}")
             else:
                 print(f"  WARN: Failed to send vote {vote_data['numero_votacion']}")
 
