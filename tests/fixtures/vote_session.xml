@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Resultado>
+  <Informacion>
+    <Sesion>177</Sesion>
+    <NumeroVotacion>1</NumeroVotacion>
+    <Fecha>30/4/2026</Fecha>
+    <Titulo>Proposición de Ley de regularización extraordinaria</Titulo>
+    <TextoExpediente>Regularización de personas extranjeras con arraigo laboral en España.</TextoExpediente>
+  </Informacion>
+  <Totales>
+    <AFavor>175</AFavor>
+    <EnContra>155</EnContra>
+    <Abstenciones>5</Abstenciones>
+    <NoVotan>15</NoVotan>
+  </Totales>
+  <Votaciones>
+    <Votacion><Grupo>GP</Grupo><Voto>No</Voto></Votacion>
+    <Votacion><Grupo>GP</Grupo><Voto>No</Voto></Votacion>
+    <Votacion><Grupo>GP</Grupo><Voto>No</Voto></Votacion>
+    <Votacion><Grupo>GP</Grupo><Voto>Sí</Voto></Votacion>
+    <Votacion><Grupo>GS</Grupo><Voto>Sí</Voto></Votacion>
+    <Votacion><Grupo>GS</Grupo><Voto>Sí</Voto></Votacion>
+    <Votacion><Grupo>GS</Grupo><Voto>Sí</Voto></Votacion>
+    <Votacion><Grupo>GSUMAR</Grupo><Voto>Sí</Voto></Votacion>
+    <Votacion><Grupo>GSUMAR</Grupo><Voto>Sí</Voto></Votacion>
+    <Votacion><Grupo>GVOX</Grupo><Voto>No</Voto></Votacion>
+    <Votacion><Grupo>GVOX</Grupo><Voto>No</Voto></Votacion>
+    <Votacion><Grupo>GVOX</Grupo><Voto>No</Voto></Votacion>
+  </Votaciones>
+</Resultado>
