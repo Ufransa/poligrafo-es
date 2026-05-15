@@ -1,0 +1,14 @@
+{
+  "vivienda": ["vivienda", "alquiler", "hipoteca", "arrendamiento", "habitación", "inmobili"],
+  "fiscalidad": ["impuesto", "fiscal", "irpf", "iva", "tributar", "hacienda", "recaudación"],
+  "empleo": ["empleo", "trabajo", "laboral", "desempleo", "paro", "salario", "cotización"],
+  "sanidad": ["sanidad", "salud", "hospital", "sanitario", "medicamento", "farmacia", "médico"],
+  "educación": ["educación", "escuela", "universidad", "formación", "enseñanza", "becas"],
+  "pensiones": ["pensión", "pensiones", "jubilación", "jubilados", "seguridad social"],
+  "seguridad": ["seguridad", "policía", "delincuencia", "criminalidad", "orden público"],
+  "medio_ambiente": ["clima", "medio ambiente", "energía renovable", "contaminación", "emisiones", "verde"],
+  "digitalización": ["digital", "tecnología", "internet", "ciberseguridad", "IA", "inteligencia artificial"],
+  "libertades_civiles": ["libertad", "derechos", "aborto", "lgbtq", "igualdad", "discriminación"],
+  "inmigración": ["inmigración", "inmigrante", "extranjero", "asilo", "refugiado", "fronteras"],
+  "infraestructuras": ["infraestructura", "carretera", "ferroviario", "tren", "autopista", "obra pública"]
+}
