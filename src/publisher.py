@@ -1,3 +1,4 @@
+import html
 import json
 import requests
 
@@ -22,12 +23,12 @@ def format_vote_alert(vote, parties):
     """
     lines = [
         f"🗳️ <b>Sesión {vote['session_number']} · Votación {vote['numero_votacion']}</b>",
-        f"<b>{vote['titulo']}</b>",
+        f"<b>{html.escape(vote['titulo'])}</b>",
     ]
 
     expediente = vote.get("texto_expediente", "").strip()
     if expediente:
-        preview = expediente[:200] + ("…" if len(expediente) > 200 else "")
+        preview = html.escape(expediente[:200]) + ("…" if len(expediente) > 200 else "")
         lines.append(f"<i>{preview}</i>")
 
     lines.append("")
@@ -61,7 +62,10 @@ def send_message(token, channel_id, text):
         "parse_mode": "HTML",
         "disable_web_page_preview": True,
     }
-    r = requests.post(url, json=payload, timeout=15)
+    try:
+        r = requests.post(url, json=payload, timeout=15)
+    except requests.exceptions.RequestException:
+        return None
     if r.status_code == 200 and r.json().get("ok"):
         return r.json()["result"]["message_id"]
     return None
