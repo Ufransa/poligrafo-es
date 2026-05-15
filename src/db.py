@@ -57,10 +57,12 @@ CREATE TABLE IF NOT EXISTS program_chunks (
 );
 
 CREATE TABLE IF NOT EXISTS vote_program_matches (
+    id INTEGER PRIMARY KEY,
     vote_id INTEGER REFERENCES votes(id),
     chunk_id INTEGER REFERENCES program_chunks(id),
     party TEXT,
-    score REAL
+    score REAL,
+    UNIQUE(vote_id, chunk_id, party)
 );
 
 CREATE TABLE IF NOT EXISTS published_messages (
@@ -83,6 +85,7 @@ def init_db(db_path=DEFAULT_DB):
 def get_conn(db_path=DEFAULT_DB):
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 
