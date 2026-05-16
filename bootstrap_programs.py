@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+"""
+bootstrap_programs.py — PolígrafoES
+One-shot: download party PDFs, extract text chunks, store in DB.
+Run once: python bootstrap_programs.py
+PSOE PDF is Cloudflare-protected — scrapling is used automatically if regular download fails.
+"""
+import sys
+from src.db import init_db, get_conn, insert_program_chunk
+from src.programs import PARTY_PDFS, download_pdf_bytes, extract_chunks
+from src.matcher import load_categories
+
+
+def run():
+    init_db()
+    conn = get_conn()
+    categories = load_categories()
+
+    try:
+        for party, url in PARTY_PDFS.items():
+            print(f"\nProcessing {party}...")
+            pdf_bytes = download_pdf_bytes(url)
+
+            if pdf_bytes is None and party == "PSOE":
+                print("  Regular download failed for PSOE, trying scrapling...")
+                try:
+                    from scrapling.fetchers import StealthyFetcher
+                    fetcher = StealthyFetcher()
+                    page = fetcher.fetch(url)
+                    pdf_bytes = page.body if page else None
+                except Exception as e:
+                    print(f"  scrapling failed: {e}")
+
+            if pdf_bytes is None:
+                print(f"  WARN: Could not download {party} PDF — skipping.")
+                continue
+
+            print(f"  Downloaded {len(pdf_bytes) // 1024}KB. Extracting chunks...")
+            chunks = extract_chunks(pdf_bytes, party, categories)
+            print(f"  {len(chunks)} categorized chunks extracted.")
+
+            for chunk in chunks:
+                insert_program_chunk(
+                    conn,
+                    party=chunk["party"],
+                    category=chunk["category"],
+                    page_start=chunk["page_start"],
+                    text=chunk["text"],
+                )
+
+            print(f"  {party}: {len(chunks)} chunks stored.")
+
+        total = conn.execute("SELECT COUNT(*) FROM program_chunks").fetchone()[0]
+        print(f"\nDone. Total program chunks in DB: {total}")
+    finally:
+        conn.close()
+
+
+if __name__ == "__main__":
+    run()
