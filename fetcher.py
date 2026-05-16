@@ -135,52 +135,59 @@ def run(dry_run=False):
             print(f"  {len(items)} items in sections I+II.")
 
             for item in items:
-                entry_info = fetch_boe_entry(item["url_xml"])
-                rango = entry_info["rango"] if entry_info else ""
-                texto_preview = entry_info["texto_preview"] if entry_info else ""
-
-                cats = categorize_text(item["titulo"] + " " + texto_preview, categories)
-                insert_boe_entry(
-                    conn,
-                    identificador=item["identificador"],
-                    titulo=item["titulo"],
-                    rango=rango,
-                    departamento=item["departamento"],
-                    fecha=item["fecha"],
-                    url_xml=item["url_xml"],
-                    categories=cats,
-                    texto_preview=texto_preview,
-                )
-
-            # 5. Publish unpublished BOE entries
-            unpublished_boe = get_unpublished_boe_entries(conn)
-            print(f"  {len(unpublished_boe)} BOE entries to publish.")
-
-            for row in unpublished_boe:
-                entry_data = {
-                    "identificador": row["identificador"],
-                    "titulo": row["titulo"],
-                    "rango": row["rango"],
-                    "departamento": row["departamento"],
-                    "fecha": row["fecha"],
-                    "url_xml": row["url_xml"],
-                    "categories": json.loads(row["categories"]),
-                }
-                text = format_boe_alert(entry_data)
-
-                if dry_run:
-                    print("\n--- DRY RUN BOE ---")
-                    print(text)
-                    print("--- END ---")
-                    mark_boe_published(conn, row["id"], telegram_message_id=0)
+                try:
+                    entry_info = fetch_boe_entry(item["url_xml"])
+                    rango = entry_info["rango"] if entry_info else ""
+                    texto_preview = entry_info["texto_preview"] if entry_info else ""
+                    cats = categorize_text(item["titulo"] + " " + texto_preview, categories)
+                    insert_boe_entry(
+                        conn,
+                        identificador=item["identificador"],
+                        titulo=item["titulo"],
+                        rango=rango,
+                        departamento=item["departamento"],
+                        fecha=item["fecha"],
+                        url_xml=item["url_xml"],
+                        categories=cats,
+                        texto_preview=texto_preview,
+                    )
+                except Exception as e:
+                    print(f"  WARN: Could not process BOE item {item.get('identificador')}: {e}")
                     continue
 
-                msg_id = send_message(TOKEN, CHANNEL, text)
-                if msg_id:
-                    mark_boe_published(conn, row["id"], telegram_message_id=msg_id)
-                    print(f"  Published BOE {row['identificador']} -> Telegram msg {msg_id}")
-                else:
-                    print(f"  WARN: Failed to send BOE {row['identificador']}")
+        # 5. Publish unpublished BOE entries (always runs, even on holidays)
+        unpublished_boe = get_unpublished_boe_entries(conn)
+        print(f"  {len(unpublished_boe)} BOE entries to publish.")
+
+        for row in unpublished_boe:
+            try:
+                cats = json.loads(row["categories"])
+            except (json.JSONDecodeError, TypeError):
+                cats = []
+            entry_data = {
+                "identificador": row["identificador"],
+                "titulo": row["titulo"],
+                "rango": row["rango"],
+                "departamento": row["departamento"],
+                "fecha": row["fecha"],
+                "url_xml": row["url_xml"],
+                "categories": cats,
+            }
+            text = format_boe_alert(entry_data)
+
+            if dry_run:
+                print("\n--- DRY RUN BOE ---")
+                print(text)
+                print("--- END ---")
+                mark_boe_published(conn, row["id"], telegram_message_id=0)
+                continue
+
+            msg_id = send_message(TOKEN, CHANNEL, text)
+            if msg_id:
+                mark_boe_published(conn, row["id"], telegram_message_id=msg_id)
+                print(f"  Published BOE {row['identificador']} -> Telegram msg {msg_id}")
+            else:
+                print(f"  WARN: Failed to send BOE {row['identificador']}")
 
         print("\nDone.")
     finally:
