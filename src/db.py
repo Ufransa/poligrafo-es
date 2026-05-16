@@ -181,3 +181,39 @@ def mark_boe_published(conn, entry_id, telegram_message_id):
         (entry_id, telegram_message_id, datetime.now(timezone.utc).isoformat())
     )
     conn.commit()
+
+
+def insert_program_chunk(conn, party, category, page_start, text):
+    conn.execute(
+        "INSERT INTO program_chunks (party, category, page_start, text) VALUES (?,?,?,?)",
+        (party, category, page_start, text),
+    )
+    conn.commit()
+    return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+
+def get_all_program_chunks(conn):
+    return conn.execute(
+        "SELECT id, party, category, page_start, text FROM program_chunks"
+    ).fetchall()
+
+
+def insert_vote_program_match(conn, vote_id, chunk_id, party, score):
+    conn.execute(
+        """INSERT OR IGNORE INTO vote_program_matches (vote_id, chunk_id, party, score)
+           VALUES (?,?,?,?)""",
+        (vote_id, chunk_id, party, score),
+    )
+    conn.commit()
+
+
+def get_vote_program_matches(conn, vote_id):
+    """Returns matches ordered by score desc, each row has party, score, text."""
+    return conn.execute(
+        """SELECT vm.party, vm.score, pc.text
+           FROM vote_program_matches vm
+           JOIN program_chunks pc ON vm.chunk_id = pc.id
+           WHERE vm.vote_id = ?
+           ORDER BY vm.score DESC""",
+        (vote_id,),
+    ).fetchall()

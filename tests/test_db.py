@@ -7,6 +7,8 @@ from src.db import (
     get_last_session_number, insert_session, insert_vote, insert_vote_groups,
     get_unpublished_votes, get_vote_groups, mark_vote_published,
     insert_boe_entry, get_unpublished_boe_entries, mark_boe_published,
+    insert_program_chunk, get_all_program_chunks,
+    insert_vote_program_match, get_vote_program_matches,
 )
 
 @pytest.fixture
@@ -114,3 +116,43 @@ def test_mark_boe_published_updates_flag(db):
     mark_boe_published(db, entry_id, telegram_message_id=99)
     row = db.execute("SELECT published FROM boe_entries WHERE id=?", (entry_id,)).fetchone()
     assert row["published"] == 1
+
+
+def test_insert_program_chunk_stores_and_retrieves(db):
+    chunk_id = insert_program_chunk(db, "PP", "vivienda", 5, "El partido propone medidas de vivienda asequible.")
+    rows = get_all_program_chunks(db)
+    assert len(rows) == 1
+    assert rows[0]["party"] == "PP"
+    assert rows[0]["category"] == "vivienda"
+    assert rows[0]["page_start"] == 5
+    assert "vivienda" in rows[0]["text"]
+
+
+def test_get_all_program_chunks_returns_all(db):
+    insert_program_chunk(db, "PP", "vivienda", 1, "texto vivienda")
+    insert_program_chunk(db, "PSOE", "fiscalidad", 3, "texto fiscal")
+    rows = get_all_program_chunks(db)
+    assert len(rows) == 2
+    parties = {r["party"] for r in rows}
+    assert parties == {"PP", "PSOE"}
+
+
+def test_insert_vote_program_match_stores_data(db):
+    session_id = insert_session(db, 1, "20260515")
+    vote_id = insert_vote(db, session_id, 1, "Ley de vivienda", "texto", "15/5/2026")
+    chunk_id = insert_program_chunk(db, "PP", "vivienda", 1, "propuesta vivienda")
+    insert_vote_program_match(db, vote_id, chunk_id, "PP", score=3.0)
+    matches = get_vote_program_matches(db, vote_id)
+    assert len(matches) == 1
+    assert matches[0]["party"] == "PP"
+    assert matches[0]["score"] == 3.0
+
+
+def test_insert_vote_program_match_is_idempotent(db):
+    session_id = insert_session(db, 1, "20260515")
+    vote_id = insert_vote(db, session_id, 1, "Ley", "texto", "15/5/2026")
+    chunk_id = insert_program_chunk(db, "PP", "vivienda", 1, "texto")
+    insert_vote_program_match(db, vote_id, chunk_id, "PP", score=2.0)
+    insert_vote_program_match(db, vote_id, chunk_id, "PP", score=2.0)
+    matches = get_vote_program_matches(db, vote_id)
+    assert len(matches) == 1
