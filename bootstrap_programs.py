@@ -3,9 +3,10 @@
 bootstrap_programs.py — PolígrafoES
 One-shot: download party PDFs, extract text chunks, store in DB.
 Run once: python bootstrap_programs.py
-WARNING: not idempotent — re-running inserts duplicate chunks. Wipe DB first or delete from program_chunks if re-running.
-PSOE PDF is Cloudflare-protected — scrapling is used automatically if regular download fails.
+WARNING: not idempotent — re-running inserts duplicate chunks. Wipe program_chunks first if re-running.
+PSOE PDF is Cloudflare-protected — place psoe_programa.pdf in the project root before running.
 """
+import os
 from src.db import init_db, get_conn, insert_program_chunk
 from src.programs import PARTY_PDFS, download_pdf_bytes, extract_chunks
 from src.matcher import load_categories
@@ -22,42 +23,13 @@ def run():
             pdf_bytes = download_pdf_bytes(url)
 
             if pdf_bytes is None and party == "PSOE":
-                import os as _os
-                local = _os.path.join(_os.path.dirname(__file__), "psoe_programa.pdf")
-                if _os.path.exists(local):
+                local = os.path.join(os.path.dirname(__file__), "psoe_programa.pdf")
+                if os.path.exists(local):
                     print("  Using local psoe_programa.pdf...")
-                    with open(local, "rb") as _f:
-                        _content = _f.read()
-                    if _content.startswith(b"%PDF"):
-                        pdf_bytes = _content
-
-            if pdf_bytes is None and party == "PSOE":
-                print("  Regular download failed for PSOE, trying browser headers...")
-                import requests as _req
-                for _referer in ("https://www.psoe.es/", "https://www.google.com/"):
-                    try:
-                        _r = _req.get(url, timeout=(10, 120), headers={
-                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                            "Referer": _referer,
-                            "Accept": "application/pdf,*/*",
-                        })
-                        if _r.status_code == 200 and _r.content.startswith(b"%PDF"):
-                            pdf_bytes = _r.content
-                            break
-                    except Exception:
-                        pass
-
-            if pdf_bytes is None and party == "PSOE":
-                print("  Browser headers failed, trying scrapling...")
-                try:
-                    from scrapling.fetchers import StealthyFetcher
-                    fetcher = StealthyFetcher()
-                    page = fetcher.fetch(url)
-                    raw = page.body if page else None
-                    if raw and raw.startswith(b"%PDF"):
-                        pdf_bytes = raw
-                except Exception as e:
-                    print(f"  scrapling failed: {e}")
+                    with open(local, "rb") as f:
+                        content = f.read()
+                    if content.startswith(b"%PDF"):
+                        pdf_bytes = content
 
             if pdf_bytes is None:
                 print(f"  WARN: Could not download {party} PDF — skipping.")
