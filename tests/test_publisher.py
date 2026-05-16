@@ -111,3 +111,16 @@ def test_format_boe_alert_contains_boe_link():
 def test_format_boe_alert_under_telegram_limit():
     text = format_boe_alert(SAMPLE_BOE_ENTRY)
     assert len(text) <= 4096
+
+
+def test_format_boe_alert_works_with_minimal_entry():
+    minimal = {
+        "identificador": "BOE-A-2026-00001",
+        "titulo": "Ley de prueba",
+        "fecha": "20260515",
+        "categories": [],
+    }
+    text = format_boe_alert(minimal)
+    assert "Ley de prueba" in text
+    assert "BOE-A-2026-00001" in text
+    assert len(text) <= 4096

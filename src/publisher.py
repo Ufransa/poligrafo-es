@@ -67,7 +67,7 @@ def format_boe_alert(entry):
 
     cats = entry.get("categories", [])
     if cats:
-        lines.append(f"🏷️ {' · '.join(cats)}")
+        lines.append(f"🏷️ {' · '.join(html.escape(c) for c in cats)}")
 
     lines.append(f"📅 {entry['fecha']}")
     boe_id = entry["identificador"]
