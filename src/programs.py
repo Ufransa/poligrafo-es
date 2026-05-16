@@ -27,7 +27,10 @@ def download_pdf_bytes(url):
         return None
     if r.status_code != 200:
         return None
-    return r.content
+    content = r.content
+    if not content.startswith(b"%PDF"):
+        return None
+    return content
 
 
 def _text_to_chunks(text):

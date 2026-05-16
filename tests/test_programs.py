@@ -74,10 +74,10 @@ def test_download_pdf_bytes_returns_content_on_200():
     from src.programs import download_pdf_bytes
     mock_resp = MagicMock()
     mock_resp.status_code = 200
-    mock_resp.content = b"pdf_content"
+    mock_resp.content = b"%PDF-1.4 fake content"
     with patch("src.programs.requests.get", return_value=mock_resp):
         result = download_pdf_bytes("https://example.com/file.pdf")
-    assert result == b"pdf_content"
+    assert result == b"%PDF-1.4 fake content"
 
 
 def test_download_pdf_bytes_returns_none_on_404():
