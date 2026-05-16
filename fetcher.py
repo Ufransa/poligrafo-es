@@ -3,7 +3,7 @@
 fetcher.py — PolígrafoES
 Cron: 21:00 diario
 Descubre nuevas sesiones del Congreso, parsea votos, publica en Telegram.
-Ingesta sumario BOE del día y publica entradas relevantes.
+Ingesta sumario BOE del dia y publica entradas relevantes.
 """
 import json
 import os
@@ -18,14 +18,27 @@ from src.db import (
     get_last_session_number, insert_session, insert_vote, insert_vote_groups,
     get_unpublished_votes, get_vote_groups, mark_vote_published,
     insert_boe_entry, get_unpublished_boe_entries, mark_boe_published,
+    insert_program_chunk, get_all_program_chunks,
+    insert_vote_program_match, get_vote_program_matches,
 )
 from src.congreso import fetch_opendata_html, discover_latest_session, download_session_zip, parse_vote_xml
 from src.boe import fetch_boe_sumario, extract_boe_items, fetch_boe_entry
-from src.matcher import categorize_text, load_categories
+from src.matcher import categorize_text, load_categories, find_program_matches
 from src.publisher import load_parties, format_vote_alert, format_boe_alert, send_message
 
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHANNEL = os.environ.get("TELEGRAM_CHANNEL_ID")
+
+
+def _best_matches_per_party(match_rows):
+    """Return one {party, text} per party (already sorted by score desc)."""
+    seen = set()
+    result = []
+    for row in match_rows:
+        if row["party"] not in seen:
+            result.append({"party": row["party"], "text": row["text"]})
+            seen.add(row["party"])
+    return result
 
 
 def run(dry_run=False):
@@ -38,6 +51,8 @@ def run(dry_run=False):
     try:
         parties = load_parties()
         categories = load_categories()
+        all_chunks = get_all_program_chunks(conn)
+        print(f"Loaded {len(all_chunks)} program chunks for matching.")
 
         # 1. Discover latest Congreso session
         print("Fetching Congreso opendata page...")
@@ -78,6 +93,13 @@ def run(dry_run=False):
                         categories=vote_cats,
                     )
                     insert_vote_groups(conn, vote_id, vote["group_votes"])
+
+                    if all_chunks:
+                        vote_text = vote["titulo"] + " " + vote["texto_expediente"]
+                        prog_matches = find_program_matches(vote_text, all_chunks)
+                        for m in prog_matches:
+                            insert_vote_program_match(conn, vote_id, m["chunk_id"], m["party"], m["score"])
+
                     print(f"  Stored vote {vote['numero_votacion']}: {vote['titulo'][:60]}")
             else:
                 print("No new sessions. Nothing to do.")
@@ -89,6 +111,8 @@ def run(dry_run=False):
         for row in unpublished:
             vote_id = row["id"]
             group_rows = get_vote_groups(conn, vote_id)
+            match_rows = get_vote_program_matches(conn, vote_id)
+            program_context = _best_matches_per_party(match_rows)
 
             vote_data = {
                 "session_number": row["session_number"],
@@ -107,7 +131,7 @@ def run(dry_run=False):
                 },
             }
 
-            text = format_vote_alert(vote_data, parties)
+            text = format_vote_alert(vote_data, parties, program_context or None)
 
             if dry_run:
                 print("\n--- DRY RUN VOTE ---")
@@ -139,6 +163,7 @@ def run(dry_run=False):
                     entry_info = fetch_boe_entry(item["url_xml"])
                     rango = entry_info["rango"] if entry_info else ""
                     texto_preview = entry_info["texto_preview"] if entry_info else ""
+
                     cats = categorize_text(item["titulo"] + " " + texto_preview, categories)
                     insert_boe_entry(
                         conn,
@@ -155,7 +180,7 @@ def run(dry_run=False):
                     print(f"  WARN: Could not process BOE item {item.get('identificador')}: {e}")
                     continue
 
-        # 5. Publish unpublished BOE entries (always runs, even on holidays)
+        # 5. Publish unpublished BOE entries
         unpublished_boe = get_unpublished_boe_entries(conn)
         print(f"  {len(unpublished_boe)} BOE entries to publish.")
 
