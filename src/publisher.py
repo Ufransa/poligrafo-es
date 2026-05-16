@@ -52,6 +52,33 @@ def format_vote_alert(vote, parties):
     return text
 
 
+def format_boe_alert(entry):
+    """
+    entry: dict with identificador, titulo, rango, departamento, fecha, categories
+    Returns: HTML string for Telegram (parse_mode=HTML)
+    """
+    lines = [
+        f"📜 <b>{html.escape(entry['titulo'])}</b>",
+    ]
+    if entry.get("rango"):
+        lines.append(f"<i>{html.escape(entry['rango'])}</i>")
+    if entry.get("departamento"):
+        lines.append(f"🏛️ {html.escape(entry['departamento'])}")
+
+    cats = entry.get("categories", [])
+    if cats:
+        lines.append(f"🏷️ {' · '.join(cats)}")
+
+    lines.append(f"📅 {entry['fecha']}")
+    boe_id = entry["identificador"]
+    lines.append(f'🔗 <a href="https://www.boe.es/diario_boe/txt.php?id={boe_id}">Ver en BOE</a>')
+
+    text = "\n".join(lines)
+    if len(text) > 4096:
+        text = text[:4093] + "…"
+    return text
+
+
 def send_message(token, channel_id, text):
     """
     Send a message to a Telegram channel.

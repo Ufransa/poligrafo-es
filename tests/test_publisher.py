@@ -1,7 +1,7 @@
 import json
 import pytest
 from unittest.mock import patch, MagicMock
-from src.publisher import format_vote_alert, send_message, load_parties
+from src.publisher import format_vote_alert, send_message, load_parties, format_boe_alert
 
 PARTIES = {
     "GP": "PP",
@@ -81,3 +81,33 @@ def test_send_message_returns_none_on_failure():
         msg_id = send_message("fake_token", "fake_channel", "Hello")
 
     assert msg_id is None
+
+
+SAMPLE_BOE_ENTRY = {
+    "identificador": "BOE-A-2026-10511",
+    "titulo": "Real Decreto 392/2026 sobre fiscalidad del IRPF",
+    "rango": "Real Decreto",
+    "departamento": "Ministerio de Hacienda",
+    "fecha": "20260515",
+    "categories": ["fiscalidad"],
+}
+
+
+def test_format_boe_alert_contains_title():
+    text = format_boe_alert(SAMPLE_BOE_ENTRY)
+    assert "Real Decreto 392/2026" in text
+
+
+def test_format_boe_alert_contains_category():
+    text = format_boe_alert(SAMPLE_BOE_ENTRY)
+    assert "fiscalidad" in text
+
+
+def test_format_boe_alert_contains_boe_link():
+    text = format_boe_alert(SAMPLE_BOE_ENTRY)
+    assert "BOE-A-2026-10511" in text
+
+
+def test_format_boe_alert_under_telegram_limit():
+    text = format_boe_alert(SAMPLE_BOE_ENTRY)
+    assert len(text) <= 4096
