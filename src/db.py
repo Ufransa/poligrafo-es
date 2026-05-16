@@ -151,3 +151,33 @@ def mark_vote_published(conn, vote_id, telegram_message_id):
         (vote_id, telegram_message_id, datetime.now(timezone.utc).isoformat())
     )
     conn.commit()
+
+
+def insert_boe_entry(conn, identificador, titulo, rango, departamento, fecha, url_xml, categories, texto_preview):
+    conn.execute(
+        """INSERT OR IGNORE INTO boe_entries
+           (identificador, titulo, rango, departamento, fecha, url_xml, categories, texto_preview)
+           VALUES (?,?,?,?,?,?,?,?)""",
+        (identificador, titulo, rango, departamento, fecha, url_xml,
+         json.dumps(categories or []), texto_preview or "")
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT id FROM boe_entries WHERE identificador=?", (identificador,)
+    ).fetchone()
+    return row["id"]
+
+
+def get_unpublished_boe_entries(conn):
+    return conn.execute(
+        "SELECT * FROM boe_entries WHERE published=0 AND categories != '[]' ORDER BY fecha, id"
+    ).fetchall()
+
+
+def mark_boe_published(conn, entry_id, telegram_message_id):
+    conn.execute("UPDATE boe_entries SET published=1 WHERE id=?", (entry_id,))
+    conn.execute(
+        "INSERT INTO published_messages (type, ref_id, telegram_message_id, sent_at) VALUES ('boe_alert',?,?,?)",
+        (entry_id, telegram_message_id, datetime.now(timezone.utc).isoformat())
+    )
+    conn.commit()
