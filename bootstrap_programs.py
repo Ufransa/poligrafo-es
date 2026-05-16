@@ -3,6 +3,7 @@
 bootstrap_programs.py — PolígrafoES
 One-shot: download party PDFs, extract text chunks, store in DB.
 Run once: python bootstrap_programs.py
+WARNING: not idempotent — re-running inserts duplicate chunks. Wipe DB first or delete from program_chunks if re-running.
 PSOE PDF is Cloudflare-protected — scrapling is used automatically if regular download fails.
 """
 from src.db import init_db, get_conn, insert_program_chunk

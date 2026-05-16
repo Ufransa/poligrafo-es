@@ -128,7 +128,7 @@ def test_format_boe_alert_works_with_minimal_entry():
 
 SAMPLE_PROGRAM_MATCHES = [
     {"party": "PP",   "text": "El PP propone regulación del mercado de alquiler con medidas para viviendas asequibles de protección oficial."},
-    {"party": "GVOX", "text": "VOX se opone a la regulación del alquiler porque distorsiona el mercado y reduce la oferta disponible."},
+    {"party": "VOX", "text": "VOX se opone a la regulación del alquiler porque distorsiona el mercado y reduce la oferta disponible."},
 ]
 
 

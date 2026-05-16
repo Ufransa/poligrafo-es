@@ -3,7 +3,7 @@
 fetcher.py — PolígrafoES
 Cron: 21:00 diario
 Descubre nuevas sesiones del Congreso, parsea votos, publica en Telegram.
-Ingesta sumario BOE del dia y publica entradas relevantes.
+Ingesta sumario BOE del día y publica entradas relevantes.
 """
 import json
 import os
