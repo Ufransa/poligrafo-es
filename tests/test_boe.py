@@ -150,3 +150,12 @@ def test_fetch_boe_entry_returns_none_on_error():
     with patch("src.boe.requests.get", side_effect=Exception("timeout")):
         result = fetch_boe_entry("https://www.boe.es/diario_boe/xml.php?id=BOE-A-2026-001")
     assert result is None
+
+
+def test_fetch_boe_sumario_returns_none_on_json_error():
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.side_effect = ValueError("not json")
+    with patch("src.boe.requests.get", return_value=mock_resp):
+        result = fetch_boe_sumario("20260515")
+    assert result is None

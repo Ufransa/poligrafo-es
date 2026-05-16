@@ -12,11 +12,11 @@ def fetch_boe_sumario(date_str):
     """date_str: 'YYYYMMDD'. Returns parsed JSON dict or None."""
     try:
         r = requests.get(f"{BOE_API_BASE}/{date_str}", headers=HEADERS, timeout=TIMEOUT)
+        if r.status_code != 200:
+            return None
+        return r.json()
     except Exception:
         return None
-    if r.status_code != 200:
-        return None
-    return r.json()
 
 
 def _as_list(field):
@@ -35,13 +35,13 @@ def extract_boe_items(sumario_data, sections=("1", "2")):
     """
     try:
         fecha = sumario_data["data"]["sumario"]["metadatos"]["fecha_publicacion"]
-        diario_list = sumario_data["data"]["sumario"]["diario"]
+        diario_list = _as_list(sumario_data["data"]["sumario"]["diario"])
     except (KeyError, TypeError):
         return []
 
     results = []
     for diario in diario_list:
-        for seccion in diario.get("seccion", []):
+        for seccion in _as_list(diario.get("seccion")):
             if seccion.get("codigo") not in sections:
                 continue
             for dpto in _as_list(seccion.get("departamento", [])):
