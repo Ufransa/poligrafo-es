@@ -5,7 +5,6 @@ One-shot: download party PDFs, extract text chunks, store in DB.
 Run once: python bootstrap_programs.py
 PSOE PDF is Cloudflare-protected — scrapling is used automatically if regular download fails.
 """
-import sys
 from src.db import init_db, get_conn, insert_program_chunk
 from src.programs import PARTY_PDFS, download_pdf_bytes, extract_chunks
 from src.matcher import load_categories
