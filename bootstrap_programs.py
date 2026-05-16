@@ -22,12 +22,30 @@ def run():
             pdf_bytes = download_pdf_bytes(url)
 
             if pdf_bytes is None and party == "PSOE":
-                print("  Regular download failed for PSOE, trying scrapling...")
+                print("  Regular download failed for PSOE, trying browser headers...")
+                import requests as _req
+                for _referer in ("https://www.psoe.es/", "https://www.google.com/"):
+                    try:
+                        _r = _req.get(url, timeout=(10, 120), headers={
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                            "Referer": _referer,
+                            "Accept": "application/pdf,*/*",
+                        })
+                        if _r.status_code == 200 and _r.content.startswith(b"%PDF"):
+                            pdf_bytes = _r.content
+                            break
+                    except Exception:
+                        pass
+
+            if pdf_bytes is None and party == "PSOE":
+                print("  Browser headers failed, trying scrapling...")
                 try:
                     from scrapling.fetchers import StealthyFetcher
                     fetcher = StealthyFetcher()
                     page = fetcher.fetch(url)
-                    pdf_bytes = page.body if page else None
+                    raw = page.body if page else None
+                    if raw and raw.startswith(b"%PDF"):
+                        pdf_bytes = raw
                 except Exception as e:
                     print(f"  scrapling failed: {e}")
 
