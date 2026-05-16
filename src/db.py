@@ -217,3 +217,35 @@ def get_vote_program_matches(conn, vote_id):
            ORDER BY vm.score DESC""",
         (vote_id,),
     ).fetchall()
+
+
+def get_published_votes_since(conn, since_iso):
+    return conn.execute("""SELECT v.id, v.titulo, v.fecha, v.vote_number,
+                                  s.session_number, s.session_date
+                           FROM votes v
+                           JOIN sessions s ON v.session_id = s.id
+                           JOIN published_messages pm ON pm.ref_id = v.id AND pm.type = 'vote_alert'
+                           WHERE pm.sent_at >= ?
+                           ORDER BY s.session_number, v.vote_number""", (since_iso,)).fetchall()
+
+
+def get_published_boe_entries_since(conn, since_iso):
+    return conn.execute("""SELECT be.id, be.identificador, be.titulo, be.categories, be.fecha
+                           FROM boe_entries be
+                           JOIN published_messages pm ON pm.ref_id = be.id AND pm.type = 'boe_alert'
+                           WHERE pm.sent_at >= ?
+                           ORDER BY be.fecha, be.id""", (since_iso,)).fetchall()
+
+
+def get_vote_groups_for_votes(conn, vote_ids):
+    if not vote_ids:
+        return {}
+    vote_ids = list(vote_ids)
+    placeholders = ",".join("?" * len(vote_ids))
+    rows = conn.execute(
+        f"SELECT vote_id, grupo_code, voto FROM vote_groups WHERE vote_id IN ({placeholders})",
+        vote_ids).fetchall()
+    result = {}
+    for row in rows:
+        result.setdefault(row["vote_id"], {})[row["grupo_code"]] = row["voto"]
+    return result

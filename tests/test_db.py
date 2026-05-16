@@ -9,6 +9,7 @@ from src.db import (
     insert_boe_entry, get_unpublished_boe_entries, mark_boe_published,
     insert_program_chunk, get_all_program_chunks,
     insert_vote_program_match, get_vote_program_matches,
+    get_published_votes_since, get_published_boe_entries_since, get_vote_groups_for_votes,
 )
 
 @pytest.fixture
@@ -156,3 +157,50 @@ def test_insert_vote_program_match_is_idempotent(db):
     insert_vote_program_match(db, vote_id, chunk_id, "PP", score=2.0)
     matches = get_vote_program_matches(db, vote_id)
     assert len(matches) == 1
+
+
+def test_get_published_votes_since_returns_only_matching_rows(db):
+    sid = insert_session(db, 10, "2024-01-15")
+    vid = insert_vote(db, sid, 1, "Test vote", "", "")
+    insert_vote_groups(db, vid, {"GP": {"voto": "Si", "total": 10, "divided": False}})
+    mark_vote_published(db, vid, telegram_message_id=999)
+    # mark_vote_published inserts a published_message row with the current timestamp.
+    # Update it to a known past timestamp for deterministic testing.
+    db.execute(
+        "UPDATE published_messages SET sent_at=? WHERE ref_id=? AND type='vote_alert'",
+        ("2024-01-14T10:00:00", vid)
+    )
+    db.commit()
+    rows = get_published_votes_since(db, "2024-01-15T00:00:00")
+    assert rows == []
+    rows2 = get_published_votes_since(db, "2024-01-13T00:00:00")
+    assert len(rows2) == 1
+    assert rows2[0]["titulo"] == "Test vote"
+
+
+def test_get_published_boe_entries_since_returns_only_matching(db):
+    entry_id = insert_boe_entry(db, "BOE-A-2024-001", "Ley de prueba", "Ley", "Dpto", "20240115", None, ["Fiscal"], "")
+    mark_boe_published(db, entry_id, telegram_message_id=999)
+    db.execute(
+        "UPDATE published_messages SET sent_at = ? WHERE ref_id = ? AND type = ?",
+        ("2024-01-15T09:00:00", entry_id, "boe_alert")
+    )
+    db.commit()
+    rows = get_published_boe_entries_since(db, "2024-01-16T00:00:00")
+    assert rows == []
+    rows2 = get_published_boe_entries_since(db, "2024-01-14T00:00:00")
+    assert len(rows2) == 1
+    assert rows2[0]["identificador"] == "BOE-A-2024-001"
+
+
+def test_get_vote_groups_for_votes_groups_by_vote_id(db):
+    sid = insert_session(db, 11, "2024-01-16")
+    vid1 = insert_vote(db, sid, 1, "Vote A", "", "")
+    vid2 = insert_vote(db, sid, 2, "Vote B", "", "")
+    insert_vote_groups(db, vid1, {"GP": {"voto": "Si", "total": 10, "divided": False},
+                                   "GS": {"voto": "No", "total": 5, "divided": False}})
+    insert_vote_groups(db, vid2, {"GP": {"voto": "No", "total": 8, "divided": False}})
+    result = get_vote_groups_for_votes(db, [vid1, vid2])
+    assert result[vid1] == {"GP": "Si", "GS": "No"}
+    assert result[vid2] == {"GP": "No"}
+    assert get_vote_groups_for_votes(db, []) == {}

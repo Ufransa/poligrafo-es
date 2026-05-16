@@ -47,7 +47,10 @@ def _boe_line(entry):
     titulo = entry["titulo"]
     title_short = html.escape(titulo[:60]) + ("…" if len(titulo) > 60 else "")
     cats_raw = entry["categories"]
-    cats = json.loads(cats_raw) if isinstance(cats_raw, str) else cats_raw
+    try:
+        cats = json.loads(cats_raw) if isinstance(cats_raw, str) else cats_raw
+    except (json.JSONDecodeError, TypeError):
+        cats = []
     cat_str = " · ".join(cats[:2]) if cats else ""
     boe_id = entry["identificador"]
     url = f"https://www.boe.es/diario_boe/txt.php?id={boe_id}"
@@ -89,12 +92,15 @@ def format_digest(votes, vote_groups_map, boe_entries, week_start, parties):
 
     # Split: votes message + BOE message
     msg1_parts = [header] + vote_lines + ["", footer]
-    msg2_parts = [f"📜 <b>BOE RELEVANTE — semana del {week_start}</b>"] + boe_lines[1:] + ["", footer]
     msg1 = "\n".join(msg1_parts)
-    msg2 = "\n".join(msg2_parts)
-
     if len(msg1) > 4096:
         msg1 = msg1[:4093] + "…"
+
+    if not boe_lines:
+        return [msg1]
+
+    msg2_parts = [f"📜 <b>BOE RELEVANTE — semana del {week_start}</b>"] + boe_lines[1:] + ["", footer]
+    msg2 = "\n".join(msg2_parts)
     if len(msg2) > 4096:
         msg2 = msg2[:4093] + "…"
 
@@ -110,8 +116,9 @@ def run(dry_run=False):
     conn = get_conn()
     try:
         parties = load_parties()
-        since_iso = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
-        week_start = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%d/%m/%Y")
+        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+        since_iso = seven_days_ago.isoformat()
+        week_start = seven_days_ago.strftime("%d/%m/%Y")
 
         votes = get_published_votes_since(conn, since_iso)
         boe_entries = get_published_boe_entries_since(conn, since_iso)
