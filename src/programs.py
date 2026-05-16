@@ -21,7 +21,7 @@ def download_pdf_bytes(url):
     """Download PDF from URL. Returns bytes or None on any failure."""
     try:
         r = requests.get(
-            url, timeout=TIMEOUT, headers={"User-Agent": "PoligrafoES/1.0"}
+            url, timeout=(10, 120), headers={"User-Agent": "PoligrafoES/1.0"}
         )
     except Exception:
         return None
@@ -45,7 +45,9 @@ def extract_chunks(pdf_bytes, party, categories):
     """
     Extract categorized text chunks from PDF bytes.
     Returns list of {party, category, page_start, text}.
+    page_start: 1-indexed chunk sequence number (not PDF page number — all pages are concatenated before chunking).
     Chunks that match no category are discarded.
+    A single chunk that matches N categories produces N dicts — one per matched category.
     """
     all_text = ""
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:

@@ -1,5 +1,4 @@
 # tests/test_programs.py
-import pytest
 from unittest.mock import patch, MagicMock
 
 CATEGORIES = {
@@ -95,3 +94,19 @@ def test_download_pdf_bytes_returns_none_on_network_error():
     with patch("src.programs.requests.get", side_effect=Exception("timeout")):
         result = download_pdf_bytes("https://example.com/file.pdf")
     assert result is None
+
+
+def test_extract_chunks_handles_page_with_no_text():
+    from src.programs import extract_chunks
+    mock_page = MagicMock()
+    mock_page.extract_text.return_value = None  # pdfplumber returns None for image-only pages
+
+    mock_pdf = MagicMock()
+    mock_pdf.__enter__ = lambda s: mock_pdf
+    mock_pdf.__exit__ = MagicMock(return_value=False)
+    mock_pdf.pages = [mock_page]
+
+    with patch("src.programs.pdfplumber.open", return_value=mock_pdf):
+        chunks = extract_chunks(b"fake_pdf", "PP", {"vivienda": ["vivienda"]})
+
+    assert chunks == []
