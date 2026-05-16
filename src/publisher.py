@@ -9,16 +9,19 @@ VOTO_EMOJI = {
     "No vota": "➖",
 }
 
+_PROGRAM_PARTY_DISPLAY = {"PP": "PP", "PSOE": "PSOE", "SUMAR": "Sumar", "VOX": "Vox"}
+
 
 def load_parties(config_path="config/parties.json"):
     with open(config_path, encoding="utf-8") as f:
         return json.load(f)
 
 
-def format_vote_alert(vote, parties):
+def format_vote_alert(vote, parties, program_matches=None):
     """
     vote: dict with session_number, numero_votacion, titulo, texto_expediente, fecha, group_votes
     parties: dict of {code: display_name}
+    program_matches: optional list of {party, text} — best match per party
     Returns: HTML string for Telegram (parse_mode=HTML)
     """
     lines = [
@@ -38,6 +41,13 @@ def format_vote_alert(vote, parties):
         name = parties.get(code, code)
         divided_note = " <i>(div.)</i>" if gv.get("divided") else ""
         lines.append(f"{emoji} {name}{divided_note}")
+
+    if program_matches:
+        lines.append("")
+        for match in program_matches:
+            party_name = _PROGRAM_PARTY_DISPLAY.get(match["party"], match["party"])
+            excerpt = html.escape(match["text"][:200]) + ("…" if len(match["text"]) > 200 else "")
+            lines.append(f"📋 <b>{party_name}</b> en su programa: <i>{excerpt}</i>")
 
     lines.append("")
     lines.append(f"📅 {vote['fecha']}")
