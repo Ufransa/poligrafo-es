@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 .pytest_cache/
 spike_results*.json
+psoe_programa.pdf

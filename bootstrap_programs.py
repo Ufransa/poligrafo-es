@@ -22,6 +22,16 @@ def run():
             pdf_bytes = download_pdf_bytes(url)
 
             if pdf_bytes is None and party == "PSOE":
+                import os as _os
+                local = _os.path.join(_os.path.dirname(__file__), "psoe_programa.pdf")
+                if _os.path.exists(local):
+                    print("  Using local psoe_programa.pdf...")
+                    with open(local, "rb") as _f:
+                        _content = _f.read()
+                    if _content.startswith(b"%PDF"):
+                        pdf_bytes = _content
+
+            if pdf_bytes is None and party == "PSOE":
                 print("  Regular download failed for PSOE, trying browser headers...")
                 import requests as _req
                 for _referer in ("https://www.psoe.es/", "https://www.google.com/"):
