@@ -64,5 +64,5 @@ def test_find_program_matches_excludes_below_threshold():
 
 def test_find_program_matches_sorted_by_score_desc():
     matches = find_program_matches("alquiler vivienda regulación acceso social asequible", SAMPLE_CHUNKS, min_keywords=1)
-    if len(matches) >= 2:
-        assert matches[0]["score"] >= matches[1]["score"]
+    assert len(matches) >= 2
+    assert matches[0]["score"] >= matches[1]["score"]

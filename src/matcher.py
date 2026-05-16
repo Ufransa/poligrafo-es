@@ -52,6 +52,7 @@ def find_program_matches(vote_text, chunks, min_keywords=2):
         key = (chunk["id"], chunk["party"])
         if key in seen:
             continue
+        seen.add(key)
         chunk_kws = _keywords(chunk["text"])
         score = len(vote_kws & chunk_kws)
         if score >= min_keywords:
@@ -63,6 +64,5 @@ def find_program_matches(vote_text, chunks, min_keywords=2):
                     "text": chunk["text"],
                 }
             )
-            seen.add(key)
 
     return sorted(results, key=lambda x: -x["score"])
