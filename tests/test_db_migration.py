@@ -62,6 +62,24 @@ def test_migration_purges_legacy_matches(tmp_path):
     conn.close()
 
 
+def test_insert_vote_stores_totals_and_resultado(tmp_path):
+    from src.db import insert_session, insert_vote
+    db = tmp_path / "test.db"
+    init_db(db)
+    conn = get_conn(db)
+    sid = insert_session(conn, 200, "20260611")
+    vid = insert_vote(conn, sid, 1, "Título", "Expediente", "11/6/2026",
+                      categories=["vivienda"],
+                      a_favor=200, en_contra=140, abstenciones=10,
+                      resultado="aprobada")
+    row = conn.execute("SELECT * FROM votes WHERE id=?", (vid,)).fetchone()
+    assert row["a_favor"] == 200
+    assert row["en_contra"] == 140
+    assert row["abstenciones"] == 10
+    assert row["resultado"] == "aprobada"
+    conn.close()
+
+
 def test_purge_only_runs_once(tmp_path):
     """Matches inserted AFTER the migration must survive a re-init."""
     db = tmp_path / "test.db"

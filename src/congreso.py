@@ -41,6 +41,11 @@ def aggregate_group_votes(raw_votes):
     return result
 
 
+def compute_resultado(a_favor, en_contra):
+    """Resultado de la votación según los totales oficiales del XML."""
+    return "aprobada" if a_favor > en_contra else "rechazada"
+
+
 def parse_vote_xml(xml_str):
     """Parse a VOT_*.xml string. Returns a dict with vote metadata + aggregated group votes."""
     root = ET.fromstring(xml_str)

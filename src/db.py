@@ -138,10 +138,16 @@ def insert_session(conn, session_number, session_date, zip_url=None):
     return row["id"]
 
 
-def insert_vote(conn, session_id, vote_number, titulo, texto_expediente, fecha, categories=None):
+def insert_vote(conn, session_id, vote_number, titulo, texto_expediente, fecha,
+                categories=None, a_favor=None, en_contra=None,
+                abstenciones=None, resultado=None):
     conn.execute(
-        "INSERT OR IGNORE INTO votes (session_id, vote_number, titulo, texto_expediente, fecha, categories) VALUES (?,?,?,?,?,?)",
-        (session_id, vote_number, titulo, texto_expediente, fecha, json.dumps(categories or []))
+        """INSERT OR IGNORE INTO votes
+           (session_id, vote_number, titulo, texto_expediente, fecha, categories,
+            a_favor, en_contra, abstenciones, resultado)
+           VALUES (?,?,?,?,?,?,?,?,?,?)""",
+        (session_id, vote_number, titulo, texto_expediente, fecha,
+         json.dumps(categories or []), a_favor, en_contra, abstenciones, resultado)
     )
     conn.commit()
     row = conn.execute(
