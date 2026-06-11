@@ -1,15 +1,12 @@
 import pytest
-import sqlite3
 import json
-from pathlib import Path
 from src.db import (
     init_db, get_conn,
     get_last_session_number, insert_session, insert_vote, insert_vote_groups,
-    get_unpublished_votes, get_vote_groups, mark_vote_published,
-    insert_boe_entry, get_unpublished_boe_entries, mark_boe_published,
+    get_votes_for_digest, get_vote_groups, mark_digest_published,
+    insert_boe_entry, get_boe_for_digest,
     insert_program_chunk, get_all_program_chunks,
-    insert_vote_program_match, get_vote_program_matches,
-    get_published_votes_since, get_published_boe_entries_since, get_vote_groups_for_votes,
+    insert_vote_program_match, get_validated_matches,
 )
 
 @pytest.fixture
@@ -58,25 +55,28 @@ def test_vote_and_groups_stored_correctly(db):
     assert result["GSUMAR"] == "Sí"
 
 
-def test_unpublished_votes_returned_before_mark(db):
+def test_pending_votes_returned_for_digest(db):
     session_id = insert_session(db, 177, "20260430")
     insert_vote(db, session_id, 1, "Título", "Expediente", "30/4/2026")
 
-    unpublished = get_unpublished_votes(db)
-    assert len(unpublished) == 1
+    pending = get_votes_for_digest(db)
+    assert len(pending) == 1
 
 
-def test_mark_published_removes_from_unpublished(db):
+def test_mark_digest_published_removes_from_pending(db):
     session_id = insert_session(db, 177, "20260430")
     vote_id = insert_vote(db, session_id, 1, "Título", "Expediente", "30/4/2026")
-    mark_vote_published(db, vote_id, telegram_message_id=999)
+    entry_id = insert_boe_entry(db, "BOE-A-2026-009", "T", "R", "D", "20260515", "https://...", ["empleo"], "")
 
-    unpublished = get_unpublished_votes(db)
-    assert len(unpublished) == 0
+    mark_digest_published(db, [vote_id], [entry_id], telegram_message_id=999)
+
+    assert get_votes_for_digest(db) == []
+    assert get_boe_for_digest(db) == []
+    row = db.execute("SELECT * FROM published_messages WHERE type='weekly_digest'").fetchone()
+    assert row["telegram_message_id"] == 999
 
 
 def test_insert_boe_entry_stores_data(db):
-    import json
     entry_id = insert_boe_entry(
         db,
         identificador="BOE-A-2026-001",
@@ -103,24 +103,17 @@ def test_insert_boe_entry_is_idempotent(db):
     assert count == 1
 
 
-def test_get_unpublished_boe_entries_only_returns_categorized(db):
+def test_get_boe_for_digest_only_returns_categorized(db):
     insert_boe_entry(db, "BOE-A-2026-003", "Titulo fiscal", "Ley", "Dpto", "20260515", "https://...", ["fiscalidad"], "preview")
     insert_boe_entry(db, "BOE-A-2026-004", "Sin categoria", "Ley", "Dpto", "20260515", "https://...", [], "")
-    rows = get_unpublished_boe_entries(db)
+    rows = get_boe_for_digest(db)
     ids = [r["identificador"] for r in rows]
     assert "BOE-A-2026-003" in ids
     assert "BOE-A-2026-004" not in ids
 
 
-def test_mark_boe_published_updates_flag(db):
-    entry_id = insert_boe_entry(db, "BOE-A-2026-005", "T", "R", "D", "20260515", "https://...", ["empleo"], "")
-    mark_boe_published(db, entry_id, telegram_message_id=99)
-    row = db.execute("SELECT published FROM boe_entries WHERE id=?", (entry_id,)).fetchone()
-    assert row["published"] == 1
-
-
 def test_insert_program_chunk_stores_and_retrieves(db):
-    chunk_id = insert_program_chunk(db, "PP", "vivienda", 5, "El partido propone medidas de vivienda asequible.")
+    insert_program_chunk(db, "PP", "vivienda", 5, "El partido propone medidas de vivienda asequible.")
     rows = get_all_program_chunks(db)
     assert len(rows) == 1
     assert rows[0]["party"] == "PP"
@@ -138,15 +131,16 @@ def test_get_all_program_chunks_returns_all(db):
     assert parties == {"PP", "PSOE"}
 
 
-def test_insert_vote_program_match_stores_data(db):
+def test_validated_match_stored_with_page(db):
     session_id = insert_session(db, 1, "20260515")
     vote_id = insert_vote(db, session_id, 1, "Ley de vivienda", "texto", "15/5/2026")
-    chunk_id = insert_program_chunk(db, "PP", "vivienda", 1, "propuesta vivienda")
+    chunk_id = insert_program_chunk(db, "PP", "vivienda", 7, "propuesta vivienda")
     insert_vote_program_match(db, vote_id, chunk_id, "PP", score=3.0)
-    matches = get_vote_program_matches(db, vote_id)
+    matches = get_validated_matches(db, vote_id)
     assert len(matches) == 1
     assert matches[0]["party"] == "PP"
-    assert matches[0]["score"] == 3.0
+    assert matches[0]["page_start"] == 7
+    assert "vivienda" in matches[0]["text"]
 
 
 def test_insert_vote_program_match_is_idempotent(db):
@@ -155,52 +149,5 @@ def test_insert_vote_program_match_is_idempotent(db):
     chunk_id = insert_program_chunk(db, "PP", "vivienda", 1, "texto")
     insert_vote_program_match(db, vote_id, chunk_id, "PP", score=2.0)
     insert_vote_program_match(db, vote_id, chunk_id, "PP", score=2.0)
-    matches = get_vote_program_matches(db, vote_id)
+    matches = get_validated_matches(db, vote_id)
     assert len(matches) == 1
-
-
-def test_get_published_votes_since_returns_only_matching_rows(db):
-    sid = insert_session(db, 10, "2024-01-15")
-    vid = insert_vote(db, sid, 1, "Test vote", "", "")
-    insert_vote_groups(db, vid, {"GP": {"voto": "Si", "total": 10, "divided": False}})
-    mark_vote_published(db, vid, telegram_message_id=999)
-    # mark_vote_published inserts a published_message row with the current timestamp.
-    # Update it to a known past timestamp for deterministic testing.
-    db.execute(
-        "UPDATE published_messages SET sent_at=? WHERE ref_id=? AND type='vote_alert'",
-        ("2024-01-14T10:00:00", vid)
-    )
-    db.commit()
-    rows = get_published_votes_since(db, "2024-01-15T00:00:00")
-    assert rows == []
-    rows2 = get_published_votes_since(db, "2024-01-13T00:00:00")
-    assert len(rows2) == 1
-    assert rows2[0]["titulo"] == "Test vote"
-
-
-def test_get_published_boe_entries_since_returns_only_matching(db):
-    entry_id = insert_boe_entry(db, "BOE-A-2024-001", "Ley de prueba", "Ley", "Dpto", "20240115", None, ["Fiscal"], "")
-    mark_boe_published(db, entry_id, telegram_message_id=999)
-    db.execute(
-        "UPDATE published_messages SET sent_at = ? WHERE ref_id = ? AND type = ?",
-        ("2024-01-15T09:00:00", entry_id, "boe_alert")
-    )
-    db.commit()
-    rows = get_published_boe_entries_since(db, "2024-01-16T00:00:00")
-    assert rows == []
-    rows2 = get_published_boe_entries_since(db, "2024-01-14T00:00:00")
-    assert len(rows2) == 1
-    assert rows2[0]["identificador"] == "BOE-A-2024-001"
-
-
-def test_get_vote_groups_for_votes_groups_by_vote_id(db):
-    sid = insert_session(db, 11, "2024-01-16")
-    vid1 = insert_vote(db, sid, 1, "Vote A", "", "")
-    vid2 = insert_vote(db, sid, 2, "Vote B", "", "")
-    insert_vote_groups(db, vid1, {"GP": {"voto": "Si", "total": 10, "divided": False},
-                                   "GS": {"voto": "No", "total": 5, "divided": False}})
-    insert_vote_groups(db, vid2, {"GP": {"voto": "No", "total": 8, "divided": False}})
-    result = get_vote_groups_for_votes(db, [vid1, vid2])
-    assert result[vid1] == {"GP": "Si", "GS": "No"}
-    assert result[vid2] == {"GP": "No"}
-    assert get_vote_groups_for_votes(db, []) == {}

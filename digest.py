@@ -1,110 +1,98 @@
 #!/usr/bin/env python3
 """
-digest.py — PolígrafoES
-Cron: 10:30 Monday
-Publishes weekly digest of votes and BOE entries from the past 7 days.
+digest.py — PolígrafoES v2
+Cron: lunes 10:30
+Publica el digest semanal: plantilla pura sobre datos ya enriquecidos por el
+fetcher. Sin llamadas LLM. Publica todo lo published=0 y lo marca — un lunes
+fallido se recupera solo en el siguiente run.
 """
 import html
-import json
 import os
 import sys
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
 
 from src.db import (
     init_db, get_conn,
-    get_published_votes_since, get_published_boe_entries_since, get_vote_groups_for_votes,
+    get_votes_for_digest, get_boe_for_digest, get_validated_matches,
+    get_vote_groups, mark_digest_published,
 )
 from src.publisher import load_parties, send_message
 
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHANNEL = os.environ.get("TELEGRAM_CHANNEL_ID")
 
-_VOTO_EMOJI = {"Sí": "✅", "No": "❌", "Abstención": "⚠️", "No vota": "➖"}
-_DIGEST_PARTIES = [
-    ("GP",     "PP"),
-    ("GS",     "PS"),
-    ("GSUMAR", "SU"),
-    ("GVOX",   "VX"),
-]
+TELEGRAM_LIMIT = 4096
+
+_SENSE_ORDER = ["Sí", "No", "Abstención", "No vota"]
+_SENSE_LABEL = {"Sí": "A favor", "No": "En contra",
+                "Abstención": "Abstención", "No vota": "No votó"}
+_RESULT_LABEL = {"aprobada": "✅ APROBADA", "rechazada": "❌ RECHAZADA"}
 
 
-def _vote_line(vote_row, groups):
-    titulo = vote_row["titulo"]
-    title_short = html.escape(titulo[:55]) + ("…" if len(titulo) > 55 else "")
-    parts = []
-    for code, abbr in _DIGEST_PARTIES:
-        voto = groups.get(code)
-        if voto:
-            emoji = _VOTO_EMOJI.get(voto, "❓")
-            parts.append(f"{abbr}{emoji}")
-    return f"· {title_short}  {'  '.join(parts)}"
-
-
-def _boe_line(entry):
-    titulo = entry["titulo"]
-    title_short = html.escape(titulo[:60]) + ("…" if len(titulo) > 60 else "")
-    cats_raw = entry["categories"]
-    try:
-        cats = json.loads(cats_raw) if isinstance(cats_raw, str) else cats_raw
-    except (json.JSONDecodeError, TypeError):
-        cats = []
-    cat_str = " · ".join(cats[:2]) if cats else ""
-    boe_id = entry["identificador"]
-    url = f"https://www.boe.es/diario_boe/txt.php?id={boe_id}"
-    line = f"· {title_short}"
-    if cat_str:
-        line += f" — {cat_str}"
-    line += f' · <a href="{url}">ver</a>'
-    return line
-
-
-def format_digest(votes, vote_groups_map, boe_entries, week_start, parties):
+def format_vote_block(vote, parties):
     """
-    Format weekly digest.
-    Returns a string if it fits in 4096 chars, or a list of two strings if it needs splitting.
+    vote: dict {titulo, resumen, que_cambia, resultado,
+                groups: {code: {voto, divided}}, matches: [{party, text, page_start}]}
+    Enriquecido → resumen en cristiano + resultado + consecuencia.
+    Sin enriquecer → fallback al título oficial, sin inventar nada.
     """
-    header = (
-        f"📊 <b>Semana del {week_start}</b>\n"
-        f"{len(votes)} votaciones · {len(boe_entries)} leyes BOE relevantes"
-    )
-    footer = "PolígrafoES · datos sin editar"
+    if vote.get("resumen"):
+        result = _RESULT_LABEL.get(vote.get("resultado"), "")
+        header = f"🗳️ <b>{html.escape(vote['resumen'])}</b>"
+        if result:
+            header += f" — {result}"
+        lines = [header, html.escape(vote.get("que_cambia") or "")]
+    else:
+        titulo = vote["titulo"]
+        short = html.escape(titulo[:120]) + ("…" if len(titulo) > 120 else "")
+        lines = [f"🗳️ <b>{short}</b>"]
 
-    vote_lines = []
-    if votes:
-        vote_lines.append("\n🗳️ <b>VOTACIONES</b>")
-        for row in votes:
-            groups = vote_groups_map.get(row["id"], {})
-            vote_lines.append(_vote_line(row, groups))
+    by_sense = {}
+    for code, gv in vote.get("groups", {}).items():
+        name = parties.get(code, code)
+        if gv.get("divided"):
+            name += " (div.)"
+        by_sense.setdefault(gv["voto"], []).append(name)
+    sense_parts = [
+        f"{_SENSE_LABEL[s]}: {', '.join(by_sense[s])}"
+        for s in _SENSE_ORDER if s in by_sense
+    ]
+    if sense_parts:
+        lines.append(html.escape(" · ".join(sense_parts)))
 
-    boe_lines = []
-    if boe_entries:
-        boe_lines.append("\n📜 <b>BOE RELEVANTE</b>")
-        for entry in boe_entries:
-            boe_lines.append(_boe_line(entry))
+    for m in vote.get("matches", []):
+        excerpt = html.escape(m["text"][:200]) + ("…" if len(m["text"]) > 200 else "")
+        lines.append(
+            f"📋 <b>{html.escape(m['party'])}</b> en su programa (p.{m['page_start']}): <i>{excerpt}</i>"
+        )
 
-    full = "\n".join([header] + vote_lines + boe_lines + ["", footer])
+    return "\n".join(line for line in lines if line)
 
-    if len(full) <= 4096:
-        return full
 
-    # Split: votes message + BOE message
-    msg1_parts = [header] + vote_lines + ["", footer]
-    msg1 = "\n".join(msg1_parts)
-    if len(msg1) > 4096:
-        msg1 = msg1[:4093] + "…"
+def format_boe_line(entry):
+    text = entry.get("resumen") or entry["titulo"]
+    short = html.escape(text[:160]) + ("…" if len(text) > 160 else "")
+    url = f"https://www.boe.es/diario_boe/txt.php?id={entry['identificador']}"
+    return f'· {short} · <a href="{url}">ver</a>'
 
-    if not boe_lines:
-        return [msg1]
 
-    msg2_parts = [f"📜 <b>BOE RELEVANTE — semana del {week_start}</b>"] + boe_lines[1:] + ["", footer]
-    msg2 = "\n".join(msg2_parts)
-    if len(msg2) > 4096:
-        msg2 = msg2[:4093] + "…"
-
-    return [msg1, msg2]
+def build_messages(header, blocks, footer, limit=TELEGRAM_LIMIT):
+    """Empaqueta bloques en el mínimo de mensajes ≤ limit; header en el primero,
+    footer al final de cada mensaje para que cada uno se sostenga solo."""
+    messages = []
+    current = header
+    for block in blocks:
+        candidate = current + "\n\n" + block
+        if len(candidate) + len(footer) + 2 > limit:
+            messages.append(current + "\n\n" + footer)
+            current = block
+        else:
+            current = candidate
+    messages.append(current + "\n\n" + footer)
+    return messages
 
 
 def run(dry_run=False):
@@ -116,36 +104,64 @@ def run(dry_run=False):
     conn = get_conn()
     try:
         parties = load_parties()
-        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
-        since_iso = seven_days_ago.isoformat()
-        week_start = seven_days_ago.strftime("%d/%m/%Y")
+        vote_rows = get_votes_for_digest(conn)
+        boe_rows = get_boe_for_digest(conn)
 
-        votes = get_published_votes_since(conn, since_iso)
-        boe_entries = get_published_boe_entries_since(conn, since_iso)
-
-        print(f"Digest: {len(votes)} votes, {len(boe_entries)} BOE entries since {week_start}.")
-
-        if not votes and not boe_entries:
+        print(f"Digest: {len(vote_rows)} votes, {len(boe_rows)} BOE entries pending.")
+        if not vote_rows and not boe_rows:
             print("Nothing to digest this week.")
             return
 
-        vote_ids = [row["id"] for row in votes]
-        vote_groups_map = get_vote_groups_for_votes(conn, vote_ids)
+        blocks = []
+        for row in vote_rows:
+            groups = {
+                g["grupo_code"]: {"voto": g["voto"], "divided": bool(g["divided"])}
+                for g in get_vote_groups(conn, row["id"])
+            }
+            vote = dict(row)
+            vote["groups"] = groups
+            vote["matches"] = [dict(m) for m in get_validated_matches(conn, row["id"])]
+            blocks.append(format_vote_block(vote, parties))
 
-        result = format_digest(votes, vote_groups_map, boe_entries, week_start, parties)
-        messages = [result] if isinstance(result, str) else result
+        if boe_rows:
+            boe_lines = ["📜 <b>BOE en cristiano</b>"]
+            boe_lines += [format_boe_line(dict(r)) for r in boe_rows]
+            blocks.append("\n".join(boe_lines))
 
+        now = datetime.now()
+        header = (
+            f"📊 <b>Congreso — semana hasta el {now.day:02d}/{now.month:02d}/{now.year}</b>\n"
+            f"{len(vote_rows)} votaciones · {len(boe_rows)} leyes BOE relevantes"
+        )
+        footer = "PolígrafoES"
+
+        messages = build_messages(header, blocks, footer)
+
+        sent_ids = []
         for i, text in enumerate(messages, 1):
             if dry_run:
                 print(f"\n--- DRY RUN DIGEST (msg {i}/{len(messages)}) ---")
                 print(text)
                 print("--- END ---")
+                sent_ids.append(0)
                 continue
             msg_id = send_message(TOKEN, CHANNEL, text)
             if msg_id:
+                sent_ids.append(msg_id)
                 print(f"  Sent digest msg {i} -> Telegram msg {msg_id}")
             else:
                 print(f"  WARN: Failed to send digest msg {i}")
+
+        if sent_ids and len(sent_ids) == len(messages):
+            mark_digest_published(
+                conn,
+                [r["id"] for r in vote_rows],
+                [r["id"] for r in boe_rows],
+                telegram_message_id=sent_ids[-1],
+            )
+            print("Marked items as published.")
+        else:
+            print("WARN: incomplete send; items remain pending for next run.")
 
         print("\nDone.")
     finally:
@@ -153,5 +169,4 @@ def run(dry_run=False):
 
 
 if __name__ == "__main__":
-    dry = "--dry-run" in sys.argv
-    run(dry_run=dry)
+    run(dry_run="--dry-run" in sys.argv)

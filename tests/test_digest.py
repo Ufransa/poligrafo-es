@@ -1,81 +1,84 @@
-# tests/test_digest.py
-import json
-import pytest
+# tests/test_digest.py — digest v2 (formato legible)
+from digest import format_vote_block, format_boe_line, build_messages
 
 PARTIES = {"GP": "PP", "GS": "PSOE", "GSUMAR": "Sumar", "GVOX": "Vox"}
 
-SAMPLE_VOTES = [
-    {"id": 1, "titulo": "Ley de regulación del alquiler de viviendas protegidas en zonas tensionadas", "fecha": "15/5/2026", "vote_number": 1, "session_number": 34, "session_date": "20260515"},
-    {"id": 2, "titulo": "Proposición de ley sobre fiscalidad verde y energías renovables", "fecha": "15/5/2026", "vote_number": 2, "session_number": 34, "session_date": "20260515"},
-]
-
-SAMPLE_VOTE_GROUPS = {
-    1: {"GP": "No", "GS": "Sí", "GSUMAR": "Sí", "GVOX": "No"},
-    2: {"GP": "No", "GS": "Sí", "GSUMAR": "Sí", "GVOX": "No"},
+ENRICHED_VOTE = {
+    "titulo": "Proposición de Ley Orgánica de medidas en materia de salario mínimo",
+    "resumen": "Subida del SMI a 1.250€",
+    "que_cambia": "Se acepta tramitar la ley; aún no es definitiva.",
+    "resultado": "aprobada",
+    "groups": {
+        "GS": {"voto": "Sí", "divided": False},
+        "GSUMAR": {"voto": "Sí", "divided": False},
+        "GP": {"voto": "No", "divided": False},
+        "GVOX": {"voto": "No", "divided": True},
+    },
+    "matches": [
+        {"party": "PSOE", "text": "Subiremos el SMI hasta el 60% del salario medio", "page_start": 45},
+    ],
 }
 
-SAMPLE_BOE = [
-    {"id": 1, "identificador": "BOE-A-2026-001", "titulo": "Real Decreto sobre regulación de arrendamientos urbanos", "categories": '["vivienda"]', "fecha": "20260515"},
-    {"id": 2, "identificador": "BOE-A-2026-002", "titulo": "Ley de medidas fiscales y tributarias para 2026", "categories": '["fiscalidad"]', "fecha": "20260515"},
-]
+RAW_VOTE = {
+    "titulo": "Toma en consideración de la Proposición de Ley X",
+    "resumen": None, "que_cambia": None, "resultado": None,
+    "groups": {"GP": {"voto": "No", "divided": False}},
+    "matches": [],
+}
 
 
-def test_format_digest_contains_header():
-    from digest import format_digest
-    text = format_digest(SAMPLE_VOTES, SAMPLE_VOTE_GROUPS, SAMPLE_BOE, "15/05/2026", PARTIES)
-    assert "📊" in text
-    assert "15/05/2026" in text
+def test_enriched_vote_shows_resumen_and_resultado():
+    block = format_vote_block(ENRICHED_VOTE, PARTIES)
+    assert "Subida del SMI a 1.250€" in block
+    assert "✅ APROBADA" in block
+    assert "aún no es definitiva" in block
 
 
-def test_format_digest_contains_vote_titles():
-    from digest import format_digest
-    text = format_digest(SAMPLE_VOTES, SAMPLE_VOTE_GROUPS, SAMPLE_BOE, "15/05/2026", PARTIES)
-    assert "alquiler" in text.lower() or "regulación" in text.lower()
+def test_parties_grouped_by_sense_with_full_names():
+    block = format_vote_block(ENRICHED_VOTE, PARTIES)
+    assert "A favor: PSOE, Sumar" in block
+    assert "En contra: PP, Vox (div.)" in block
+    assert "GS" not in block  # nada de siglas crípticas
 
 
-def test_format_digest_contains_vote_party_emojis():
-    from digest import format_digest
-    text = format_digest(SAMPLE_VOTES, SAMPLE_VOTE_GROUPS, SAMPLE_BOE, "15/05/2026", PARTIES)
-    assert "✅" in text
-    assert "❌" in text
+def test_validated_match_rendered_with_page():
+    block = format_vote_block(ENRICHED_VOTE, PARTIES)
+    assert "📋" in block
+    assert "PSOE" in block
+    assert "p.45" in block
 
 
-def test_format_digest_contains_boe_section():
-    from digest import format_digest
-    text = format_digest(SAMPLE_VOTES, SAMPLE_VOTE_GROUPS, SAMPLE_BOE, "15/05/2026", PARTIES)
-    assert "📜" in text
-    assert "BOE-A-2026-001" in text or "arrendamientos" in text.lower()
+def test_unenriched_vote_falls_back_to_titulo():
+    block = format_vote_block(RAW_VOTE, PARTIES)
+    assert "Toma en consideración" in block
+    assert "APROBADA" not in block  # sin resultado no se inventa nada
 
 
-def test_format_digest_empty_boe_omits_boe_section():
-    from digest import format_digest
-    text = format_digest(SAMPLE_VOTES, SAMPLE_VOTE_GROUPS, [], "15/05/2026", PARTIES)
-    assert "📜" not in text
+def test_boe_line_uses_resumen_when_available():
+    line = format_boe_line({"resumen": "Ayudas al alquiler joven de hasta 250€/mes",
+                            "titulo": "Real Decreto 123/2026, de 9 de junio, por el que...",
+                            "identificador": "BOE-A-2026-1"})
+    assert "Ayudas al alquiler joven" in line
+    assert "Real Decreto 123/2026" not in line
+    assert "BOE-A-2026-1" in line  # link al BOE
 
 
-def test_format_digest_respects_telegram_limit():
-    from digest import format_digest
-    # 50 votes to stress-test truncation
-    many_votes = [
-        {"id": i, "titulo": f"Ley número {i} sobre materia legislativa de larga denominación", "fecha": "15/5/2026", "vote_number": i, "session_number": 34, "session_date": "20260515"}
-        for i in range(1, 51)
-    ]
-    many_groups = {i: {"GP": "Sí", "GS": "No", "GSUMAR": "Sí", "GVOX": "No"} for i in range(1, 51)}
-    many_boe = [
-        {"id": i, "identificador": f"BOE-A-2026-{i:03d}", "titulo": f"Real Decreto número {i} sobre materia normativa", "categories": '["fiscalidad"]', "fecha": "20260515"}
-        for i in range(1, 31)
-    ]
-    texts = format_digest(many_votes, many_groups, many_boe, "15/05/2026", PARTIES)
-    # format_digest returns a list of strings when splitting
-    if isinstance(texts, list):
-        for t in texts:
-            assert len(t) <= 4096
-    else:
-        assert len(texts) <= 4096
+def test_boe_line_falls_back_to_titulo():
+    line = format_boe_line({"resumen": None,
+                            "titulo": "Real Decreto 123/2026, de 9 de junio",
+                            "identificador": "BOE-A-2026-1"})
+    assert "Real Decreto 123/2026" in line
 
 
-def test_format_digest_footer():
-    from digest import format_digest
-    text = format_digest(SAMPLE_VOTES, SAMPLE_VOTE_GROUPS, SAMPLE_BOE, "15/05/2026", PARTIES)
-    result = text if isinstance(text, str) else "\n".join(text)
-    assert "PolígrafoES" in result
+def test_build_messages_single_when_short():
+    msgs = build_messages("header", ["bloque1", "bloque2"], "footer")
+    assert len(msgs) == 1
+    assert msgs[0].startswith("header")
+    assert msgs[0].endswith("footer")
+
+
+def test_build_messages_splits_at_limit():
+    big_block = "x" * 3000
+    msgs = build_messages("header", [big_block, big_block], "footer", limit=4096)
+    assert len(msgs) == 2
+    assert all(len(m) <= 4096 for m in msgs)

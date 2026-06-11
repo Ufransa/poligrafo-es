@@ -166,9 +166,10 @@ def insert_vote_groups(conn, vote_id, group_votes):
     conn.commit()
 
 
-def get_unpublished_votes(conn):
+def get_votes_for_digest(conn):
+    """Todo voto aún no publicado (el digest publica y marca)."""
     return conn.execute(
-        """SELECT v.*, s.session_number, s.zip_url
+        """SELECT v.*, s.session_number
            FROM votes v
            JOIN sessions s ON v.session_id = s.id
            WHERE v.published = 0
@@ -183,11 +184,16 @@ def get_vote_groups(conn, vote_id):
     ).fetchall()
 
 
-def mark_vote_published(conn, vote_id, telegram_message_id):
-    conn.execute("UPDATE votes SET published=1 WHERE id=?", (vote_id,))
+def mark_digest_published(conn, vote_ids, boe_ids, telegram_message_id):
+    now = datetime.now(timezone.utc).isoformat()
+    for vid in vote_ids:
+        conn.execute("UPDATE votes SET published=1 WHERE id=?", (vid,))
+    for bid in boe_ids:
+        conn.execute("UPDATE boe_entries SET published=1 WHERE id=?", (bid,))
     conn.execute(
-        "INSERT INTO published_messages (type, ref_id, telegram_message_id, sent_at) VALUES ('vote_alert',?,?,?)",
-        (vote_id, telegram_message_id, datetime.now(timezone.utc).isoformat())
+        "INSERT INTO published_messages (type, ref_id, telegram_message_id, sent_at)"
+        " VALUES ('weekly_digest', NULL, ?, ?)",
+        (telegram_message_id, now),
     )
     conn.commit()
 
@@ -207,19 +213,10 @@ def insert_boe_entry(conn, identificador, titulo, rango, departamento, fecha, ur
     return row["id"]
 
 
-def get_unpublished_boe_entries(conn):
+def get_boe_for_digest(conn):
     return conn.execute(
         "SELECT * FROM boe_entries WHERE published=0 AND categories != '[]' ORDER BY fecha, id"
     ).fetchall()
-
-
-def mark_boe_published(conn, entry_id, telegram_message_id):
-    conn.execute("UPDATE boe_entries SET published=1 WHERE id=?", (entry_id,))
-    conn.execute(
-        "INSERT INTO published_messages (type, ref_id, telegram_message_id, sent_at) VALUES ('boe_alert',?,?,?)",
-        (entry_id, telegram_message_id, datetime.now(timezone.utc).isoformat())
-    )
-    conn.commit()
 
 
 def insert_program_chunk(conn, party, category, page_start, text):
@@ -246,14 +243,14 @@ def insert_vote_program_match(conn, vote_id, chunk_id, party, score):
     conn.commit()
 
 
-def get_vote_program_matches(conn, vote_id):
-    """Returns matches ordered by score desc, each row has party, score, text."""
+def get_validated_matches(conn, vote_id):
+    """Matches validados por el juez LLM, con texto y página del programa."""
     return conn.execute(
-        """SELECT vm.party, vm.score, pc.text
+        """SELECT vm.party, pc.text, pc.page_start
            FROM vote_program_matches vm
            JOIN program_chunks pc ON vm.chunk_id = pc.id
            WHERE vm.vote_id = ?
-           ORDER BY vm.score DESC""",
+           ORDER BY vm.party""",
         (vote_id,),
     ).fetchall()
 
@@ -293,33 +290,3 @@ def set_boe_enrichment(conn, entry_id, resumen):
     conn.commit()
 
 
-def get_published_votes_since(conn, since_iso):
-    return conn.execute("""SELECT v.id, v.titulo, v.fecha, v.vote_number,
-                                  s.session_number, s.session_date
-                           FROM votes v
-                           JOIN sessions s ON v.session_id = s.id
-                           JOIN published_messages pm ON pm.ref_id = v.id AND pm.type = 'vote_alert'
-                           WHERE pm.sent_at >= ?
-                           ORDER BY s.session_number, v.vote_number""", (since_iso,)).fetchall()
-
-
-def get_published_boe_entries_since(conn, since_iso):
-    return conn.execute("""SELECT be.id, be.identificador, be.titulo, be.categories, be.fecha
-                           FROM boe_entries be
-                           JOIN published_messages pm ON pm.ref_id = be.id AND pm.type = 'boe_alert'
-                           WHERE pm.sent_at >= ?
-                           ORDER BY be.fecha, be.id""", (since_iso,)).fetchall()
-
-
-def get_vote_groups_for_votes(conn, vote_ids):
-    if not vote_ids:
-        return {}
-    vote_ids = list(vote_ids)
-    placeholders = ",".join("?" * len(vote_ids))
-    rows = conn.execute(
-        f"SELECT vote_id, grupo_code, voto FROM vote_groups WHERE vote_id IN ({placeholders})",
-        vote_ids).fetchall()
-    result = {}
-    for row in rows:
-        result.setdefault(row["vote_id"], {})[row["grupo_code"]] = row["voto"]
-    return result

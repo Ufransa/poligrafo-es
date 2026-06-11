@@ -1,92 +1,11 @@
-import html
 import json
+
 import requests
-
-VOTO_EMOJI = {
-    "Sí": "✅",
-    "No": "❌",
-    "Abstención": "⚠️",
-    "No vota": "➖",
-}
-
-_PROGRAM_PARTY_DISPLAY = {"PP": "PP", "PSOE": "PSOE", "SUMAR": "Sumar", "VOX": "Vox"}
 
 
 def load_parties(config_path="config/parties.json"):
     with open(config_path, encoding="utf-8") as f:
         return json.load(f)
-
-
-def format_vote_alert(vote, parties, program_matches=None):
-    """
-    vote: dict with session_number, numero_votacion, titulo, texto_expediente, fecha, group_votes
-    parties: dict of {code: display_name}
-    program_matches: optional list of {party, text} — best match per party
-    Returns: HTML string for Telegram (parse_mode=HTML)
-    """
-    lines = [
-        f"🗳️ <b>Sesión {vote['session_number']} · Votación {vote['numero_votacion']}</b>",
-        f"<b>{html.escape(vote['titulo'])}</b>",
-    ]
-
-    expediente = vote.get("texto_expediente", "").strip()
-    if expediente:
-        preview = html.escape(expediente[:200]) + ("…" if len(expediente) > 200 else "")
-        lines.append(f"<i>{preview}</i>")
-
-    lines.append("")
-
-    for code, gv in sorted(vote["group_votes"].items()):
-        emoji = VOTO_EMOJI.get(gv["voto"], "❓")
-        name = parties.get(code, code)
-        divided_note = " <i>(div.)</i>" if gv.get("divided") else ""
-        lines.append(f"{emoji} {name}{divided_note}")
-
-    if program_matches:
-        lines.append("")
-        for match in program_matches:
-            party_name = _PROGRAM_PARTY_DISPLAY.get(match["party"], match["party"])
-            excerpt = html.escape(match["text"][:200]) + ("…" if len(match["text"]) > 200 else "")
-            lines.append(f"📋 <b>{party_name}</b> en su programa: <i>{excerpt}</i>")
-
-    lines.append("")
-    lines.append(f"📅 {vote['fecha']}")
-
-    lines.append('🔗 <a href="https://www.congreso.es/es/opendata/votaciones">Fuente: Congreso opendata</a>')
-
-    text = "\n".join(lines)
-
-    if len(text) > 4096:
-        text = text[:4093] + "…"
-
-    return text
-
-
-def format_boe_alert(entry):
-    """
-    entry: dict with identificador, titulo, rango, departamento, fecha, categories
-    Returns: HTML string for Telegram (parse_mode=HTML)
-    """
-    lines = [
-        f"📜 <b>{html.escape(entry['titulo'])}</b>",
-    ]
-    if entry.get("rango"):
-        lines.append(f"<i>{html.escape(entry['rango'])}</i>")
-    if entry.get("departamento"):
-        lines.append(f"🏛️ {html.escape(entry['departamento'])}")
-
-    cats = entry.get("categories", [])
-    if cats:
-        lines.append(f"🏷️ {' · '.join(html.escape(c) for c in cats)}")
-
-    lines.append(f"📅 {entry['fecha']}")
-    boe_id = entry["identificador"]
-    lines.append(f'🔗 <a href="https://www.boe.es/diario_boe/txt.php?id={boe_id}">Ver en BOE</a>')
-
-    text = "\n".join(lines)
-    if len(text) > 4096:
-        text = text[:4093] + "…"
-    return text
 
 
 def send_message(token, channel_id, text):
