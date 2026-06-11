@@ -66,3 +66,55 @@ def test_find_program_matches_sorted_by_score_desc():
     matches = find_program_matches("alquiler vivienda regulación acceso social asequible", SAMPLE_CHUNKS, min_keywords=1)
     assert len(matches) >= 2
     assert matches[0]["score"] >= matches[1]["score"]
+
+
+# --- top_candidates_per_party (pre-filtro para el juez LLM, v2) ---
+
+from src.matcher import top_candidates_per_party
+
+
+def _chunk(cid, party, text, page=1):
+    return {"id": cid, "party": party, "text": text, "page_start": page}
+
+
+VOTE_TEXT = "Proposición de ley sobre vivienda y alquiler asequible para jóvenes"
+
+
+def test_top_candidates_returns_dict_keyed_by_party():
+    chunks = [
+        _chunk(1, "PP", "garantizar vivienda y alquiler asequible jóvenes"),
+        _chunk(2, "PSOE", "vivienda alquiler asequible para todos los jóvenes"),
+    ]
+    result = top_candidates_per_party(VOTE_TEXT, chunks)
+    assert set(result.keys()) == {"PP", "PSOE"}
+
+
+def test_top_candidates_caps_at_five_per_party():
+    chunks = [
+        _chunk(i, "PP", f"vivienda alquiler asequible jóvenes propuesta {i}")
+        for i in range(1, 9)
+    ]
+    result = top_candidates_per_party(VOTE_TEXT, chunks)
+    assert len(result["PP"]) == 5
+
+
+def test_top_candidates_sorted_by_score_desc():
+    chunks = [
+        _chunk(1, "PP", "vivienda"),
+        _chunk(2, "PP", "vivienda alquiler asequible jóvenes"),
+    ]
+    result = top_candidates_per_party(VOTE_TEXT, chunks)
+    assert result["PP"][0]["chunk_id"] == 2
+    assert result["PP"][0]["score"] > result["PP"][1]["score"]
+
+
+def test_top_candidates_zero_score_chunks_excluded():
+    chunks = [_chunk(1, "VOX", "pesca fluvial trucha sostenible")]
+    result = top_candidates_per_party(VOTE_TEXT, chunks)
+    assert "VOX" not in result
+
+
+def test_top_candidates_carry_page_start():
+    chunks = [_chunk(7, "PSOE", "vivienda alquiler asequible", page=45)]
+    result = top_candidates_per_party(VOTE_TEXT, chunks)
+    assert result["PSOE"][0]["page_start"] == 45

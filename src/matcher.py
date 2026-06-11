@@ -66,3 +66,38 @@ def find_program_matches(vote_text, chunks, min_keywords=2):
             )
 
     return sorted(results, key=lambda x: -x["score"])
+
+
+def top_candidates_per_party(vote_text, chunks, per_party=5):
+    """
+    Pre-filtro para el juez LLM: top-N chunks por partido por score de keywords.
+    vote_text: str (titulo + texto_expediente)
+    chunks: iterable de dicts/Rows con {id, party, text, page_start}
+    Returns: {party: [{chunk_id, party, score, text, page_start}, ...]} orden score desc
+    """
+    vote_kws = _keywords(vote_text)
+    if not vote_kws:
+        return {}
+
+    seen = set()
+    by_party = {}
+    for chunk in chunks:
+        key = (chunk["id"], chunk["party"])
+        if key in seen:
+            continue
+        seen.add(key)
+        score = len(vote_kws & _keywords(chunk["text"]))
+        if score < 1:
+            continue
+        by_party.setdefault(chunk["party"], []).append({
+            "chunk_id": chunk["id"],
+            "party": chunk["party"],
+            "score": score,
+            "text": chunk["text"],
+            "page_start": chunk["page_start"],
+        })
+
+    return {
+        party: sorted(cands, key=lambda c: -c["score"])[:per_party]
+        for party, cands in by_party.items()
+    }
