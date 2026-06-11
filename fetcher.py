@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 """
-fetcher.py — PolígrafoES
+fetcher.py — PolígrafoES v2
 Cron: 21:00 diario
-Descubre nuevas sesiones del Congreso, parsea votos, publica en Telegram.
-Ingesta sumario BOE del día y publica entradas relevantes.
+Descubre nuevas sesiones del Congreso y el sumario BOE del día, y enriquece
+cada item con Haiku 4.5 (resumen llano + juez de matches). NO publica nada:
+la publicación es exclusiva del digest semanal (digest.py, lunes 10:30).
 """
-import json
-import os
-import sys
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 
@@ -16,45 +14,70 @@ load_dotenv()
 from src.db import (
     init_db, get_conn,
     get_last_session_number, insert_session, insert_vote, insert_vote_groups,
-    get_unpublished_votes, get_vote_groups, mark_vote_published,
-    insert_boe_entry, get_unpublished_boe_entries, mark_boe_published,
-    insert_program_chunk, get_all_program_chunks,
-    insert_vote_program_match, get_vote_program_matches,
+    insert_boe_entry, get_all_program_chunks,
+    insert_vote_program_match,
+    get_unenriched_votes, set_vote_enrichment,
+    get_unenriched_boe_entries, set_boe_enrichment,
 )
-from src.congreso import fetch_opendata_html, discover_latest_session, download_session_zip, parse_vote_xml
+from src.congreso import (
+    fetch_opendata_html, discover_latest_session, download_session_zip,
+    parse_vote_xml, compute_resultado,
+)
 from src.boe import fetch_boe_sumario, extract_boe_items, fetch_boe_entry
-from src.matcher import categorize_text, load_categories, find_program_matches
-from src.publisher import load_parties, format_vote_alert, format_boe_alert, send_message
-
-TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-CHANNEL = os.environ.get("TELEGRAM_CHANNEL_ID")
+from src.matcher import categorize_text, load_categories, top_candidates_per_party
+from src.llm import enrich_vote, summarize_boe
 
 
-def _best_matches_per_party(match_rows):
-    """Return one {party, text} per party (already sorted by score desc)."""
-    seen = set()
-    result = []
-    for row in match_rows:
-        if row["party"] not in seen:
-            result.append({"party": row["party"], "text": row["text"]})
-            seen.add(row["party"])
-    return result
+def enrich_pending(conn):
+    """Enriquece con LLM todos los items pendientes (enriched_at IS NULL).
+    Un fallo en un item no detiene el resto: queda NULL y se reintenta mañana."""
+    all_chunks = get_all_program_chunks(conn)
+
+    for row in get_unenriched_votes(conn):
+        try:
+            vote_text = row["titulo"] + " " + (row["texto_expediente"] or "")
+            candidates = top_candidates_per_party(vote_text, all_chunks)
+            enrichment = enrich_vote(
+                {"titulo": row["titulo"], "texto_expediente": row["texto_expediente"] or ""},
+                candidates,
+            )
+            score_by_chunk = {
+                c["chunk_id"]: c["score"]
+                for cands in candidates.values() for c in cands
+            }
+            for m in enrichment.matches:
+                insert_vote_program_match(
+                    conn, row["id"], m.chunk_id, m.party,
+                    score_by_chunk.get(m.chunk_id, 0),
+                )
+            set_vote_enrichment(conn, row["id"], enrichment.resumen, enrichment.que_cambia)
+            print(f"  Enriched vote {row['id']}: {enrichment.resumen}")
+        except Exception as e:
+            print(f"  WARN: enrichment failed for vote {row['id']}: {e}")
+
+    for row in get_unenriched_boe_entries(conn):
+        try:
+            resumen = summarize_boe(
+                {
+                    "titulo": row["titulo"],
+                    "rango": row["rango"],
+                    "departamento": row["departamento"],
+                    "texto_preview": row["texto_preview"],
+                }
+            )
+            set_boe_enrichment(conn, row["id"], resumen)
+            print(f"  Enriched BOE {row['identificador']}: {resumen[:60]}")
+        except Exception as e:
+            print(f"  WARN: enrichment failed for BOE {row['identificador']}: {e}")
 
 
-def run(dry_run=False):
-    if not TOKEN or not CHANNEL:
-        print("ERROR: TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID must be set in .env")
-        sys.exit(1)
-
+def run():
     init_db()
     conn = get_conn()
     try:
-        parties = load_parties()
         categories = load_categories()
-        all_chunks = get_all_program_chunks(conn)
-        print(f"Loaded {len(all_chunks)} program chunks for matching.")
 
-        # 1. Discover latest Congreso session
+        # 1. Descubrir última sesión del Congreso
         print("Fetching Congreso opendata page...")
         html_page = fetch_opendata_html()
         session_num, zip_url, session_date = discover_latest_session(html_page)
@@ -66,7 +89,6 @@ def run(dry_run=False):
             print(f"Latest session on web: {session_num} | Last processed: {last}")
 
             if session_num > last:
-                # 2. Download and parse session ZIP
                 print(f"New session {session_num} ({session_date}). Downloading ZIP...")
                 xml_files = download_session_zip(zip_url)
                 print(f"  {len(xml_files)} vote files found.")
@@ -91,63 +113,17 @@ def run(dry_run=False):
                         vote["texto_expediente"],
                         vote["fecha"],
                         categories=vote_cats,
+                        a_favor=vote["a_favor"],
+                        en_contra=vote["en_contra"],
+                        abstenciones=vote["abstenciones"],
+                        resultado=compute_resultado(vote["a_favor"], vote["en_contra"]),
                     )
                     insert_vote_groups(conn, vote_id, vote["group_votes"])
-
-                    if all_chunks:
-                        vote_text = vote["titulo"] + " " + vote["texto_expediente"]
-                        prog_matches = find_program_matches(vote_text, all_chunks)
-                        for m in prog_matches:
-                            insert_vote_program_match(conn, vote_id, m["chunk_id"], m["party"], m["score"])
-
                     print(f"  Stored vote {vote['numero_votacion']}: {vote['titulo'][:60]}")
             else:
                 print("No new sessions. Nothing to do.")
 
-        # 3. Publish unpublished Congreso votes
-        unpublished = get_unpublished_votes(conn)
-        print(f"\n{len(unpublished)} votes to publish.")
-
-        for row in unpublished:
-            vote_id = row["id"]
-            group_rows = get_vote_groups(conn, vote_id)
-            match_rows = get_vote_program_matches(conn, vote_id)
-            program_context = _best_matches_per_party(match_rows)
-
-            vote_data = {
-                "session_number": row["session_number"],
-                "numero_votacion": row["vote_number"],
-                "titulo": row["titulo"],
-                "texto_expediente": row["texto_expediente"],
-                "fecha": row["fecha"],
-                "zip_url": row["zip_url"],
-                "group_votes": {
-                    g["grupo_code"]: {
-                        "voto": g["voto"],
-                        "total": g["total_diputados"],
-                        "divided": bool(g["divided"]),
-                    }
-                    for g in group_rows
-                },
-            }
-
-            text = format_vote_alert(vote_data, parties, program_context or None)
-
-            if dry_run:
-                print("\n--- DRY RUN VOTE ---")
-                print(text)
-                print("--- END ---")
-                mark_vote_published(conn, vote_id, telegram_message_id=0)
-                continue
-
-            msg_id = send_message(TOKEN, CHANNEL, text)
-            if msg_id:
-                mark_vote_published(conn, vote_id, telegram_message_id=msg_id)
-                print(f"  Published vote {vote_data['numero_votacion']} -> Telegram msg {msg_id}")
-            else:
-                print(f"  WARN: Failed to send vote {vote_data['numero_votacion']}")
-
-        # 4. Ingest today's BOE
+        # 2. Ingesta BOE del día
         today = datetime.now(timezone.utc).strftime("%Y%m%d")
         print(f"\nFetching BOE sumario for {today}...")
         sumario_data = fetch_boe_sumario(today)
@@ -180,39 +156,9 @@ def run(dry_run=False):
                     print(f"  WARN: Could not process BOE item {item.get('identificador')}: {e}")
                     continue
 
-        # 5. Publish unpublished BOE entries
-        unpublished_boe = get_unpublished_boe_entries(conn)
-        print(f"  {len(unpublished_boe)} BOE entries to publish.")
-
-        for row in unpublished_boe:
-            try:
-                cats = json.loads(row["categories"])
-            except (json.JSONDecodeError, TypeError):
-                cats = []
-            entry_data = {
-                "identificador": row["identificador"],
-                "titulo": row["titulo"],
-                "rango": row["rango"],
-                "departamento": row["departamento"],
-                "fecha": row["fecha"],
-                "url_xml": row["url_xml"],
-                "categories": cats,
-            }
-            text = format_boe_alert(entry_data)
-
-            if dry_run:
-                print("\n--- DRY RUN BOE ---")
-                print(text)
-                print("--- END ---")
-                mark_boe_published(conn, row["id"], telegram_message_id=0)
-                continue
-
-            msg_id = send_message(TOKEN, CHANNEL, text)
-            if msg_id:
-                mark_boe_published(conn, row["id"], telegram_message_id=msg_id)
-                print(f"  Published BOE {row['identificador']} -> Telegram msg {msg_id}")
-            else:
-                print(f"  WARN: Failed to send BOE {row['identificador']}")
+        # 3. Enriquecimiento LLM (items nuevos + reintentos de días fallidos)
+        print("\nEnriching pending items...")
+        enrich_pending(conn)
 
         print("\nDone.")
     finally:
@@ -220,5 +166,4 @@ def run(dry_run=False):
 
 
 if __name__ == "__main__":
-    dry = "--dry-run" in sys.argv
-    run(dry_run=dry)
+    run()

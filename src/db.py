@@ -258,6 +258,41 @@ def get_vote_program_matches(conn, vote_id):
     ).fetchall()
 
 
+def get_unenriched_votes(conn):
+    """Votos pendientes de enriquecer. Excluye published=1 para no quemar
+    API en votos pre-v2 ya emitidos como alertas."""
+    return conn.execute(
+        """SELECT v.*, s.session_number FROM votes v
+           JOIN sessions s ON v.session_id = s.id
+           WHERE v.enriched_at IS NULL AND v.published = 0
+           ORDER BY v.id"""
+    ).fetchall()
+
+
+def set_vote_enrichment(conn, vote_id, resumen, que_cambia):
+    conn.execute(
+        "UPDATE votes SET resumen=?, que_cambia=?, enriched_at=? WHERE id=?",
+        (resumen, que_cambia, datetime.now(timezone.utc).isoformat(), vote_id),
+    )
+    conn.commit()
+
+
+def get_unenriched_boe_entries(conn):
+    return conn.execute(
+        """SELECT * FROM boe_entries
+           WHERE enriched_at IS NULL AND published = 0 AND categories != '[]'
+           ORDER BY id"""
+    ).fetchall()
+
+
+def set_boe_enrichment(conn, entry_id, resumen):
+    conn.execute(
+        "UPDATE boe_entries SET resumen=?, enriched_at=? WHERE id=?",
+        (resumen, datetime.now(timezone.utc).isoformat(), entry_id),
+    )
+    conn.commit()
+
+
 def get_published_votes_since(conn, since_iso):
     return conn.execute("""SELECT v.id, v.titulo, v.fecha, v.vote_number,
                                   s.session_number, s.session_date

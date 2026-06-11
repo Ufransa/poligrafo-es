@@ -36,38 +36,6 @@ def _keywords(text):
     return words - _STOPWORDS
 
 
-def find_program_matches(vote_text, chunks, min_keywords=2):
-    """
-    vote_text: str (titulo + texto_expediente of the vote)
-    chunks: list/iterable of dicts or Row objects with {id, party, text}
-    Returns: list of {chunk_id, party, score, text} sorted by score desc
-    """
-    vote_kws = _keywords(vote_text)
-    if not vote_kws:
-        return []
-
-    seen = set()
-    results = []
-    for chunk in chunks:
-        key = (chunk["id"], chunk["party"])
-        if key in seen:
-            continue
-        seen.add(key)
-        chunk_kws = _keywords(chunk["text"])
-        score = len(vote_kws & chunk_kws)
-        if score >= min_keywords:
-            results.append(
-                {
-                    "chunk_id": chunk["id"],
-                    "party": chunk["party"],
-                    "score": score,
-                    "text": chunk["text"],
-                }
-            )
-
-    return sorted(results, key=lambda x: -x["score"])
-
-
 def top_candidates_per_party(vote_text, chunks, per_party=5):
     """
     Pre-filtro para el juez LLM: top-N chunks por partido por score de keywords.
