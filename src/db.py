@@ -76,9 +76,42 @@ CREATE TABLE IF NOT EXISTS published_messages (
 """
 
 
+_VOTE_V2_COLUMNS = {
+    "a_favor": "INTEGER",
+    "en_contra": "INTEGER",
+    "abstenciones": "INTEGER",
+    "resultado": "TEXT",
+    "resumen": "TEXT",
+    "que_cambia": "TEXT",
+    "enriched_at": "TEXT",
+}
+_BOE_V2_COLUMNS = {
+    "resumen": "TEXT",
+    "enriched_at": "TEXT",
+}
+
+
+def _migrate_v2(conn):
+    """Añade columnas v2 si faltan. La primera vez purga los matches legacy
+    (ruido del umbral de 2 keywords, ~713 por voto)."""
+    vote_cols = {r[1] for r in conn.execute("PRAGMA table_info(votes)")}
+    first_time = "resumen" not in vote_cols
+    for col, ctype in _VOTE_V2_COLUMNS.items():
+        if col not in vote_cols:
+            conn.execute(f"ALTER TABLE votes ADD COLUMN {col} {ctype}")
+    boe_cols = {r[1] for r in conn.execute("PRAGMA table_info(boe_entries)")}
+    for col, ctype in _BOE_V2_COLUMNS.items():
+        if col not in boe_cols:
+            conn.execute(f"ALTER TABLE boe_entries ADD COLUMN {col} {ctype}")
+    if first_time:
+        conn.execute("DELETE FROM vote_program_matches")
+    conn.commit()
+
+
 def init_db(db_path=DEFAULT_DB):
     conn = sqlite3.connect(str(db_path))
     conn.executescript(SCHEMA)
+    _migrate_v2(conn)
     conn.commit()
     conn.close()
 
