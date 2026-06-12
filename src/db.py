@@ -76,9 +76,42 @@ CREATE TABLE IF NOT EXISTS published_messages (
 """
 
 
+_VOTE_V2_COLUMNS = {
+    "a_favor": "INTEGER",
+    "en_contra": "INTEGER",
+    "abstenciones": "INTEGER",
+    "resultado": "TEXT",
+    "resumen": "TEXT",
+    "que_cambia": "TEXT",
+    "enriched_at": "TEXT",
+}
+_BOE_V2_COLUMNS = {
+    "resumen": "TEXT",
+    "enriched_at": "TEXT",
+}
+
+
+def _migrate_v2(conn):
+    """Añade columnas v2 si faltan. La primera vez purga los matches legacy
+    (ruido del umbral de 2 keywords, ~713 por voto)."""
+    vote_cols = {r[1] for r in conn.execute("PRAGMA table_info(votes)")}
+    first_time = "resumen" not in vote_cols
+    for col, ctype in _VOTE_V2_COLUMNS.items():
+        if col not in vote_cols:
+            conn.execute(f"ALTER TABLE votes ADD COLUMN {col} {ctype}")
+    boe_cols = {r[1] for r in conn.execute("PRAGMA table_info(boe_entries)")}
+    for col, ctype in _BOE_V2_COLUMNS.items():
+        if col not in boe_cols:
+            conn.execute(f"ALTER TABLE boe_entries ADD COLUMN {col} {ctype}")
+    if first_time:
+        conn.execute("DELETE FROM vote_program_matches")
+    conn.commit()
+
+
 def init_db(db_path=DEFAULT_DB):
     conn = sqlite3.connect(str(db_path))
     conn.executescript(SCHEMA)
+    _migrate_v2(conn)
     conn.commit()
     conn.close()
 
@@ -105,10 +138,16 @@ def insert_session(conn, session_number, session_date, zip_url=None):
     return row["id"]
 
 
-def insert_vote(conn, session_id, vote_number, titulo, texto_expediente, fecha, categories=None):
+def insert_vote(conn, session_id, vote_number, titulo, texto_expediente, fecha,
+                categories=None, a_favor=None, en_contra=None,
+                abstenciones=None, resultado=None):
     conn.execute(
-        "INSERT OR IGNORE INTO votes (session_id, vote_number, titulo, texto_expediente, fecha, categories) VALUES (?,?,?,?,?,?)",
-        (session_id, vote_number, titulo, texto_expediente, fecha, json.dumps(categories or []))
+        """INSERT OR IGNORE INTO votes
+           (session_id, vote_number, titulo, texto_expediente, fecha, categories,
+            a_favor, en_contra, abstenciones, resultado)
+           VALUES (?,?,?,?,?,?,?,?,?,?)""",
+        (session_id, vote_number, titulo, texto_expediente, fecha,
+         json.dumps(categories or []), a_favor, en_contra, abstenciones, resultado)
     )
     conn.commit()
     row = conn.execute(
@@ -127,9 +166,10 @@ def insert_vote_groups(conn, vote_id, group_votes):
     conn.commit()
 
 
-def get_unpublished_votes(conn):
+def get_votes_for_digest(conn):
+    """Todo voto aún no publicado (el digest publica y marca)."""
     return conn.execute(
-        """SELECT v.*, s.session_number, s.zip_url
+        """SELECT v.*, s.session_number
            FROM votes v
            JOIN sessions s ON v.session_id = s.id
            WHERE v.published = 0
@@ -144,11 +184,16 @@ def get_vote_groups(conn, vote_id):
     ).fetchall()
 
 
-def mark_vote_published(conn, vote_id, telegram_message_id):
-    conn.execute("UPDATE votes SET published=1 WHERE id=?", (vote_id,))
+def mark_digest_published(conn, vote_ids, boe_ids, telegram_message_id):
+    now = datetime.now(timezone.utc).isoformat()
+    for vid in vote_ids:
+        conn.execute("UPDATE votes SET published=1 WHERE id=?", (vid,))
+    for bid in boe_ids:
+        conn.execute("UPDATE boe_entries SET published=1 WHERE id=?", (bid,))
     conn.execute(
-        "INSERT INTO published_messages (type, ref_id, telegram_message_id, sent_at) VALUES ('vote_alert',?,?,?)",
-        (vote_id, telegram_message_id, datetime.now(timezone.utc).isoformat())
+        "INSERT INTO published_messages (type, ref_id, telegram_message_id, sent_at)"
+        " VALUES ('weekly_digest', NULL, ?, ?)",
+        (telegram_message_id, now),
     )
     conn.commit()
 
@@ -168,19 +213,10 @@ def insert_boe_entry(conn, identificador, titulo, rango, departamento, fecha, ur
     return row["id"]
 
 
-def get_unpublished_boe_entries(conn):
+def get_boe_for_digest(conn):
     return conn.execute(
         "SELECT * FROM boe_entries WHERE published=0 AND categories != '[]' ORDER BY fecha, id"
     ).fetchall()
-
-
-def mark_boe_published(conn, entry_id, telegram_message_id):
-    conn.execute("UPDATE boe_entries SET published=1 WHERE id=?", (entry_id,))
-    conn.execute(
-        "INSERT INTO published_messages (type, ref_id, telegram_message_id, sent_at) VALUES ('boe_alert',?,?,?)",
-        (entry_id, telegram_message_id, datetime.now(timezone.utc).isoformat())
-    )
-    conn.commit()
 
 
 def insert_program_chunk(conn, party, category, page_start, text):
@@ -207,45 +243,50 @@ def insert_vote_program_match(conn, vote_id, chunk_id, party, score):
     conn.commit()
 
 
-def get_vote_program_matches(conn, vote_id):
-    """Returns matches ordered by score desc, each row has party, score, text."""
+def get_validated_matches(conn, vote_id):
+    """Matches validados por el juez LLM, con texto y página del programa."""
     return conn.execute(
-        """SELECT vm.party, vm.score, pc.text
+        """SELECT vm.party, pc.text, pc.page_start
            FROM vote_program_matches vm
            JOIN program_chunks pc ON vm.chunk_id = pc.id
            WHERE vm.vote_id = ?
-           ORDER BY vm.score DESC""",
+           ORDER BY vm.party""",
         (vote_id,),
     ).fetchall()
 
 
-def get_published_votes_since(conn, since_iso):
-    return conn.execute("""SELECT v.id, v.titulo, v.fecha, v.vote_number,
-                                  s.session_number, s.session_date
-                           FROM votes v
-                           JOIN sessions s ON v.session_id = s.id
-                           JOIN published_messages pm ON pm.ref_id = v.id AND pm.type = 'vote_alert'
-                           WHERE pm.sent_at >= ?
-                           ORDER BY s.session_number, v.vote_number""", (since_iso,)).fetchall()
+def get_unenriched_votes(conn):
+    """Votos pendientes de enriquecer. Excluye published=1 para no quemar
+    API en votos pre-v2 ya emitidos como alertas."""
+    return conn.execute(
+        """SELECT v.*, s.session_number FROM votes v
+           JOIN sessions s ON v.session_id = s.id
+           WHERE v.enriched_at IS NULL AND v.published = 0
+           ORDER BY v.id"""
+    ).fetchall()
 
 
-def get_published_boe_entries_since(conn, since_iso):
-    return conn.execute("""SELECT be.id, be.identificador, be.titulo, be.categories, be.fecha
-                           FROM boe_entries be
-                           JOIN published_messages pm ON pm.ref_id = be.id AND pm.type = 'boe_alert'
-                           WHERE pm.sent_at >= ?
-                           ORDER BY be.fecha, be.id""", (since_iso,)).fetchall()
+def set_vote_enrichment(conn, vote_id, resumen, que_cambia):
+    conn.execute(
+        "UPDATE votes SET resumen=?, que_cambia=?, enriched_at=? WHERE id=?",
+        (resumen, que_cambia, datetime.now(timezone.utc).isoformat(), vote_id),
+    )
+    conn.commit()
 
 
-def get_vote_groups_for_votes(conn, vote_ids):
-    if not vote_ids:
-        return {}
-    vote_ids = list(vote_ids)
-    placeholders = ",".join("?" * len(vote_ids))
-    rows = conn.execute(
-        f"SELECT vote_id, grupo_code, voto FROM vote_groups WHERE vote_id IN ({placeholders})",
-        vote_ids).fetchall()
-    result = {}
-    for row in rows:
-        result.setdefault(row["vote_id"], {})[row["grupo_code"]] = row["voto"]
-    return result
+def get_unenriched_boe_entries(conn):
+    return conn.execute(
+        """SELECT * FROM boe_entries
+           WHERE enriched_at IS NULL AND published = 0 AND categories != '[]'
+           ORDER BY id"""
+    ).fetchall()
+
+
+def set_boe_enrichment(conn, entry_id, resumen):
+    conn.execute(
+        "UPDATE boe_entries SET resumen=?, enriched_at=? WHERE id=?",
+        (resumen, datetime.now(timezone.utc).isoformat(), entry_id),
+    )
+    conn.commit()
+
+

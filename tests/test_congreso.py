@@ -35,6 +35,26 @@ def test_unanimous_group_not_marked_divided():
     assert vote["group_votes"]["GS"]["divided"] is False
 
 
+def test_compute_resultado_aprobada():
+    from src.congreso import compute_resultado
+    assert compute_resultado(a_favor=310, en_contra=33) == "aprobada"
+
+
+def test_compute_resultado_rechazada():
+    from src.congreso import compute_resultado
+    assert compute_resultado(a_favor=33, en_contra=310) == "rechazada"
+
+
+def test_compute_resultado_empate_es_rechazada():
+    from src.congreso import compute_resultado
+    assert compute_resultado(a_favor=100, en_contra=100) == "rechazada"
+
+
+def test_fixture_totals_parsed():
+    vote = parse_vote_xml(FIXTURE_XML)
+    assert vote["a_favor"] > 0 or vote["en_contra"] > 0
+
+
 def test_aggregate_group_votes_majority_wins():
     raw = [
         {"grupo": "GP", "voto": "No"},

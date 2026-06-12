@@ -36,33 +36,36 @@ def _keywords(text):
     return words - _STOPWORDS
 
 
-def find_program_matches(vote_text, chunks, min_keywords=2):
+def top_candidates_per_party(vote_text, chunks, per_party=5):
     """
-    vote_text: str (titulo + texto_expediente of the vote)
-    chunks: list/iterable of dicts or Row objects with {id, party, text}
-    Returns: list of {chunk_id, party, score, text} sorted by score desc
+    Pre-filtro para el juez LLM: top-N chunks por partido por score de keywords.
+    vote_text: str (titulo + texto_expediente)
+    chunks: iterable de dicts/Rows con {id, party, text, page_start}
+    Returns: {party: [{chunk_id, party, score, text, page_start}, ...]} orden score desc
     """
     vote_kws = _keywords(vote_text)
     if not vote_kws:
-        return []
+        return {}
 
     seen = set()
-    results = []
+    by_party = {}
     for chunk in chunks:
         key = (chunk["id"], chunk["party"])
         if key in seen:
             continue
         seen.add(key)
-        chunk_kws = _keywords(chunk["text"])
-        score = len(vote_kws & chunk_kws)
-        if score >= min_keywords:
-            results.append(
-                {
-                    "chunk_id": chunk["id"],
-                    "party": chunk["party"],
-                    "score": score,
-                    "text": chunk["text"],
-                }
-            )
+        score = len(vote_kws & _keywords(chunk["text"]))
+        if score < 1:
+            continue
+        by_party.setdefault(chunk["party"], []).append({
+            "chunk_id": chunk["id"],
+            "party": chunk["party"],
+            "score": score,
+            "text": chunk["text"],
+            "page_start": chunk["page_start"],
+        })
 
-    return sorted(results, key=lambda x: -x["score"])
+    return {
+        party: sorted(cands, key=lambda c: -c["score"])[:per_party]
+        for party, cands in by_party.items()
+    }
