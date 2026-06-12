@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.db import (
-    init_db, get_conn,
+    DEFAULT_DB, init_db, get_conn,
     get_votes_for_digest, get_boe_for_digest, get_validated_matches,
     get_vote_groups, mark_digest_published,
 )
@@ -95,13 +95,14 @@ def build_messages(header, blocks, footer, limit=TELEGRAM_LIMIT):
     return messages
 
 
-def run(dry_run=False):
+def run(dry_run=False, db_path=None):
     if not TOKEN or not CHANNEL:
         print("ERROR: TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID must be set in .env")
         sys.exit(1)
 
-    init_db()
-    conn = get_conn()
+    db_path = db_path or DEFAULT_DB
+    init_db(db_path)
+    conn = get_conn(db_path)
     try:
         parties = load_parties()
         vote_rows = get_votes_for_digest(conn)
@@ -152,7 +153,9 @@ def run(dry_run=False):
             else:
                 print(f"  WARN: Failed to send digest msg {i}")
 
-        if sent_ids and len(sent_ids) == len(messages):
+        if dry_run:
+            print("Dry run: items NOT marked as published.")
+        elif sent_ids and len(sent_ids) == len(messages):
             mark_digest_published(
                 conn,
                 [r["id"] for r in vote_rows],

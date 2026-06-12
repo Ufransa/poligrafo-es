@@ -82,3 +82,23 @@ def test_build_messages_splits_at_limit():
     msgs = build_messages("header", [big_block, big_block], "footer", limit=4096)
     assert len(msgs) == 2
     assert all(len(m) <= 4096 for m in msgs)
+
+
+def test_dry_run_does_not_mark_published(tmp_path, monkeypatch):
+    from src.db import init_db, get_conn, insert_session, insert_vote, get_votes_for_digest
+    import digest as digest_mod
+
+    db = tmp_path / "t.db"
+    init_db(db)
+    conn = get_conn(db)
+    sid = insert_session(conn, 1, "20260611")
+    insert_vote(conn, sid, 1, "Ley X", "texto", "11/6/2026")
+    conn.close()
+
+    monkeypatch.setattr(digest_mod, "TOKEN", "t")
+    monkeypatch.setattr(digest_mod, "CHANNEL", "c")
+    digest_mod.run(dry_run=True, db_path=db)
+
+    conn = get_conn(db)
+    assert len(get_votes_for_digest(conn)) == 1  # sigue pendiente para el lunes
+    conn.close()
