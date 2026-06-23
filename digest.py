@@ -29,6 +29,7 @@ TELEGRAM_LIMIT = 4096
 _SENSE_ORDER = ["Sí", "No", "Abstención", "No vota"]
 _SENSE_LABEL = {"Sí": "A favor", "No": "En contra",
                 "Abstención": "Abstención", "No vota": "No votó"}
+_SENSE_ICON = {"Sí": "✅", "No": "❌", "Abstención": "⚪", "No vota": "—"}
 _RESULT_LABEL = {"aprobada": "✅ APROBADA", "rechazada": "❌ RECHAZADA"}
 
 
@@ -56,12 +57,11 @@ def format_vote_block(vote, parties):
         if gv.get("divided"):
             name += " (div.)"
         by_sense.setdefault(gv["voto"], []).append(name)
-    sense_parts = [
-        f"{_SENSE_LABEL[s]}: {', '.join(by_sense[s])}"
-        for s in _SENSE_ORDER if s in by_sense
-    ]
-    if sense_parts:
-        lines.append(html.escape(" · ".join(sense_parts)))
+    for s in _SENSE_ORDER:
+        if s in by_sense:
+            icon = _SENSE_ICON[s]
+            parties_str = " · ".join(by_sense[s])
+            lines.append(f"{icon} {_SENSE_LABEL[s]}: {html.escape(parties_str)}")
 
     for m in vote.get("matches", []):
         excerpt = html.escape(m["text"][:200]) + ("…" if len(m["text"]) > 200 else "")
