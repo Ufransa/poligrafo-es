@@ -32,14 +32,23 @@ informado sin formación jurídica.
 
 FORMAT RULES (no negociables):
 - resumen: máximo 12 palabras. Qué se vota, en cristiano. Sin jerga parlamentaria \
-("toma en consideración", "proposición de ley orgánica"...). Si es un trámite y no \
-una ley definitiva, no lo digas aquí (va en que_cambia).
-- que_cambia: 1 o 2 frases. La consecuencia práctica: qué cambia si sale adelante, \
-o qué se ha rechazado. Si es solo un paso del trámite, dilo ("se acepta tramitarla; \
-aún no es ley").
-- matches: por cada partido del que recibas extractos, devuelve el chunk_id del ÚNICO \
-extracto que se pronuncia sobre la materia concreta que se vota, o null si ninguno lo \
-hace. Compartir vocabulario NO es pronunciarse. En caso de duda, null.
+("toma en consideración", "proposición de ley orgánica"...).
+- que_cambia: 1 o 2 frases. La consecuencia práctica según el tipo de votación:
+  · Autorización de tratado o convenio internacional: es definitivo. Si APROBADA → \
+"El tratado entra en vigor; España queda vinculada." Si RECHAZADA → "España no \
+ratifica el acuerdo." Nunca digas "aún requiere pasos" — el Congreso es la autorización final.
+  · Proyecto o proposición de ley: qué cambia en la vida cotidiana del ciudadano.
+  · Proposición no de ley: no es vinculante. Escribe: "Declaración política sin efecto \
+jurídico inmediato."
+  · Enmienda a la totalidad: si RECHAZADA → el proyecto de ley sigue tramitándose. \
+Si APROBADA → el proyecto cae completamente.
+- matches: por cada partido, devuelve el chunk_id del extracto que se pronuncia sobre \
+la materia CONCRETA que se vota, o null. Criterio estricto:
+  · Para tratados internacionales: solo hay match si el extracto menciona ese país \
+concreto, ese tipo de acuerdo bilateral específico, o esa política exterior concreta. \
+Temas domésticos genéricos con vocabulario similar (seguridad ciudadana, modernización \
+judicial, lucha contra la delincuencia) NO son match para un tratado bilateral.
+  · En general: compartir vocabulario NO es pronunciarse. En caso de duda, null.
 - Neutralidad absoluta: describe, no opines ni califiques."""
 
 _SYSTEM_BOE = """Eres el redactor de PolígrafoES. Resumes entradas del BOE para un \
