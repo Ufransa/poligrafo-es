@@ -21,7 +21,7 @@ from src.db import (
 )
 from src.congreso import (
     fetch_opendata_html, discover_latest_session, download_session_zip,
-    parse_vote_xml, compute_resultado,
+    parse_vote_xml, compute_resultado, classify_vote, expediente_key,
 )
 from src.boe import fetch_boe_sumario, extract_boe_items, fetch_boe_entry
 from src.matcher import categorize_text, load_categories, top_candidates_per_party
@@ -117,6 +117,10 @@ def run():
                         en_contra=vote["en_contra"],
                         abstenciones=vote["abstenciones"],
                         resultado=compute_resultado(vote["a_favor"], vote["en_contra"]),
+                        titulo_subgrupo=vote["titulo_subgrupo"],
+                        texto_subgrupo=vote["texto_subgrupo"],
+                        clase=classify_vote(vote["titulo_subgrupo"]),
+                        expediente_key=expediente_key(vote["texto_expediente"]),
                     )
                     insert_vote_groups(conn, vote_id, vote["group_votes"])
                     print(f"  Stored vote {vote['numero_votacion']}: {vote['titulo'][:60]}")

@@ -7,6 +7,7 @@ from src.db import (
     insert_boe_entry, get_boe_for_digest,
     insert_program_chunk, get_all_program_chunks,
     insert_vote_program_match, get_validated_matches,
+    get_expedientes_for_digest,
 )
 
 @pytest.fixture
@@ -151,3 +152,42 @@ def test_insert_vote_program_match_is_idempotent(db):
     insert_vote_program_match(db, vote_id, chunk_id, "PP", score=2.0)
     matches = get_validated_matches(db, vote_id)
     assert len(matches) == 1
+
+
+def test_get_expedientes_agrupa_parciales_bajo_su_sustantiva(tmp_path):
+    from src.db import (init_db, get_conn, insert_session, insert_vote,
+                        get_expedientes_for_digest)
+    db = tmp_path / "e.db"
+    init_db(db)
+    conn = get_conn(db)
+    sid = insert_session(conn, 192, "20260714")
+    for n in range(1, 4):
+        insert_vote(conn, sid, n, "Dictámenes", "Proyecto de Ley X", "14/7/2026",
+                    titulo_subgrupo="Enmiendas presentadas por el Grupo Parlamentario VOX",
+                    texto_subgrupo=f"Enmienda {n}.", clase="parcial",
+                    expediente_key="proyecto de ley x")
+    insert_vote(conn, sid, 54, "Dictámenes",
+                "Votación del dictamen del Proyecto de Ley X", "14/7/2026",
+                titulo_subgrupo="", texto_subgrupo="", clase="sustantiva",
+                expediente_key="proyecto de ley x", resultado="aprobada")
+
+    exps = get_expedientes_for_digest(conn)
+    assert len(exps) == 1
+    assert exps[0]["sustantiva"]["vote_number"] == 54
+    assert len(exps[0]["parciales"]) == 3
+    conn.close()
+
+
+def test_expediente_sin_sustantiva_no_se_publica(tmp_path):
+    from src.db import (init_db, get_conn, insert_session, insert_vote,
+                        get_expedientes_for_digest)
+    db = tmp_path / "e2.db"
+    init_db(db)
+    conn = get_conn(db)
+    sid = insert_session(conn, 192, "20260714")
+    insert_vote(conn, sid, 1, "Dictámenes", "Proyecto de Ley Y", "14/7/2026",
+                titulo_subgrupo="Enmiendas presentadas por el GP VOX",
+                texto_subgrupo="Enmienda 1.", clase="parcial",
+                expediente_key="proyecto de ley y")
+    assert get_expedientes_for_digest(conn) == []
+    conn.close()

@@ -149,14 +149,18 @@ def insert_session(conn, session_number, session_date, zip_url=None):
 
 def insert_vote(conn, session_id, vote_number, titulo, texto_expediente, fecha,
                 categories=None, a_favor=None, en_contra=None,
-                abstenciones=None, resultado=None):
+                abstenciones=None, resultado=None,
+                titulo_subgrupo="", texto_subgrupo="", clase=None,
+                expediente_key=None):
     conn.execute(
         """INSERT OR IGNORE INTO votes
            (session_id, vote_number, titulo, texto_expediente, fecha, categories,
-            a_favor, en_contra, abstenciones, resultado)
-           VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            a_favor, en_contra, abstenciones, resultado,
+            titulo_subgrupo, texto_subgrupo, clase, expediente_key)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (session_id, vote_number, titulo, texto_expediente, fecha,
-         json.dumps(categories or []), a_favor, en_contra, abstenciones, resultado)
+         json.dumps(categories or []), a_favor, en_contra, abstenciones, resultado,
+         titulo_subgrupo, texto_subgrupo, clase, expediente_key)
     )
     conn.commit()
     row = conn.execute(
@@ -184,6 +188,36 @@ def get_votes_for_digest(conn):
            WHERE v.published = 0
            ORDER BY s.session_number, v.vote_number"""
     ).fetchall()
+
+
+def get_expedientes_for_digest(conn):
+    """
+    Expedientes con al menos una votación sustantiva pendiente de publicar.
+    Devuelve [{expediente_key, sustantiva: Row, parciales: [Row, ...]}, ...]
+    ordenado cronológicamente. Las parciales acompañan a su sustantiva aunque
+    ya estuvieran marcadas: son contexto, no contenido publicable por sí mismo.
+    """
+    sustantivas = conn.execute(
+        """SELECT v.*, s.session_number
+           FROM votes v JOIN sessions s ON v.session_id = s.id
+           WHERE v.published = 0 AND v.clase = 'sustantiva'
+           ORDER BY s.session_number, v.vote_number"""
+    ).fetchall()
+
+    resultado = []
+    for sus in sustantivas:
+        parciales = conn.execute(
+            """SELECT * FROM votes
+               WHERE expediente_key = ? AND clase = 'parcial'
+               ORDER BY vote_number""",
+            (sus["expediente_key"],),
+        ).fetchall()
+        resultado.append({
+            "expediente_key": sus["expediente_key"],
+            "sustantiva": sus,
+            "parciales": parciales,
+        })
+    return resultado
 
 
 def get_vote_groups(conn, vote_id):
