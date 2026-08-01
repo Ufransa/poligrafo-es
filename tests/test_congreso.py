@@ -99,3 +99,46 @@ def test_votacion_de_conjunto_de_la_ley_de_discapacidad_fue_aprobada():
     assert vote["a_favor"] == 179
     assert vote["en_contra"] == 33
     assert compute_resultado(vote["a_favor"], vote["en_contra"]) == "aprobada"
+
+
+def test_clasifica_sustantiva_cuando_no_hay_subgrupo():
+    from src.congreso import classify_vote
+    assert classify_vote("") == "sustantiva"
+
+
+def test_clasifica_enmienda_a_la_totalidad_como_sustantiva():
+    from src.congreso import classify_vote
+    assert classify_vote("Enmiendas a la totalidad de texto alternativo.") == "sustantiva"
+
+
+def test_clasifica_enmienda_parcial_como_parcial():
+    from src.congreso import classify_vote
+    assert classify_vote("Enmiendas presentadas por el Grupo Parlamentario VOX") == "parcial"
+
+
+def test_clasifica_correccion_tecnica_como_parcial():
+    from src.congreso import classify_vote
+    assert classify_vote("Corrección técnica.") == "parcial"
+
+
+def test_sesion_192_produce_7_sustantivas_de_56_votaciones():
+    from src.congreso import classify_vote
+    import zipfile
+    with zipfile.ZipFile(FIXTURE_ZIP) as zf:
+        xmls = [zf.read(n).decode("utf-8", "replace")
+                for n in zf.namelist() if n.endswith(".xml")]
+    clases = [classify_vote(parse_vote_xml(x)["titulo_subgrupo"]) for x in xmls]
+    assert len(clases) == 56
+    assert clases.count("sustantiva") == 7
+
+
+def test_expediente_key_agrupa_el_dictamen_con_sus_enmiendas():
+    from src.congreso import expediente_key
+    enmienda = expediente_key("Proyecto de Ley por la que se modifican el Texto Refundido")
+    conjunto = expediente_key("Votación del dictamen del Proyecto de Ley por la que se modifican el Texto Refundido")
+    assert enmienda == conjunto
+
+
+def test_expediente_key_normaliza_espacios_y_mayusculas():
+    from src.congreso import expediente_key
+    assert expediente_key("  Proyecto   de LEY X ") == expediente_key("proyecto de ley x")

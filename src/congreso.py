@@ -46,6 +46,40 @@ def compute_resultado(a_favor, en_contra):
     return "aprobada" if a_favor > en_contra else "rechazada"
 
 
+_PREFIJOS_EXPEDIENTE = (
+    "votación del dictamen del ",
+    "votacion del dictamen del ",
+    "votación de conjunto del ",
+)
+
+
+def classify_vote(titulo_subgrupo):
+    """
+    Clasifica una votación por su TituloSubGrupo.
+
+    'sustantiva' = la votación que decide algo (conjunto de ley, convalidación
+    de decreto, toma en consideración, moción, PNL, enmienda a la totalidad).
+    'parcial'    = enmienda concreta o trámite dentro de una tramitación; su
+                   sentido de voto es táctica parlamentaria, no posicionamiento.
+    """
+    sg = (titulo_subgrupo or "").strip()
+    if not sg:
+        return "sustantiva"
+    if "totalidad" in sg.lower():
+        return "sustantiva"
+    return "parcial"
+
+
+def expediente_key(texto_expediente):
+    """Clave de agrupación: todas las votaciones de una misma ley comparten una."""
+    key = " ".join((texto_expediente or "").split()).lower()
+    for prefijo in _PREFIJOS_EXPEDIENTE:
+        if key.startswith(prefijo):
+            key = key[len(prefijo):]
+            break
+    return key
+
+
 def parse_vote_xml(xml_str):
     """Parse a VOT_*.xml string. Returns a dict with vote metadata + aggregated group votes."""
     root = ET.fromstring(xml_str)
