@@ -89,10 +89,16 @@ _BOE_V2_COLUMNS = {
     "resumen": "TEXT",
     "enriched_at": "TEXT",
 }
+_VOTE_V3_COLUMNS = {
+    "titulo_subgrupo": "TEXT",
+    "texto_subgrupo": "TEXT",
+    "clase": "TEXT",
+    "expediente_key": "TEXT",
+}
 
 
-def _migrate_v2(conn):
-    """Añade columnas v2 si faltan. La primera vez purga los matches legacy
+def _migrate(conn):
+    """Añade columnas v2/v3 si faltan. La primera vez purga los matches legacy
     (ruido del umbral de 2 keywords, ~713 por voto)."""
     vote_cols = {r[1] for r in conn.execute("PRAGMA table_info(votes)")}
     first_time = "resumen" not in vote_cols
@@ -103,6 +109,9 @@ def _migrate_v2(conn):
     for col, ctype in _BOE_V2_COLUMNS.items():
         if col not in boe_cols:
             conn.execute(f"ALTER TABLE boe_entries ADD COLUMN {col} {ctype}")
+    for col, ctype in _VOTE_V3_COLUMNS.items():
+        if col not in vote_cols:
+            conn.execute(f"ALTER TABLE votes ADD COLUMN {col} {ctype}")
     if first_time:
         conn.execute("DELETE FROM vote_program_matches")
     conn.commit()
@@ -111,7 +120,7 @@ def _migrate_v2(conn):
 def init_db(db_path=DEFAULT_DB):
     conn = sqlite3.connect(str(db_path))
     conn.executescript(SCHEMA)
-    _migrate_v2(conn)
+    _migrate(conn)
     conn.commit()
     conn.close()
 

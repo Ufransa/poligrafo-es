@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from src.congreso import parse_vote_xml, aggregate_group_votes
+from src.congreso import parse_vote_xml, aggregate_group_votes, compute_resultado
 
 FIXTURE_XML = (Path(__file__).parent / "fixtures" / "vote_session.xml").read_text(encoding="utf-8")
 
@@ -66,3 +66,36 @@ def test_aggregate_group_votes_majority_wins():
     assert result["GP"]["voto"] == "No"
     assert result["GP"]["total"] == 3
     assert result["GS"]["voto"] == "Sí"
+
+
+import zipfile
+from pathlib import Path
+
+FIXTURE_ZIP = Path(__file__).parent / "fixtures" / "sesion192.zip"
+
+
+def _xml_from_zip(numero):
+    with zipfile.ZipFile(FIXTURE_ZIP) as zf:
+        for name in zf.namelist():
+            if name.endswith(f"votacion{numero}.xml"):
+                return zf.read(name).decode("utf-8", "replace")
+    raise AssertionError(f"votacion{numero} no está en el fixture")
+
+
+def test_parse_extrae_subgrupo_de_enmienda():
+    vote = parse_vote_xml(_xml_from_zip(20))
+    assert "Euskal Herria Bildu" in vote["titulo_subgrupo"]
+    assert vote["texto_subgrupo"] == "Enmienda 270."
+
+
+def test_votacion_de_conjunto_no_tiene_subgrupo():
+    vote = parse_vote_xml(_xml_from_zip(54))
+    assert vote["titulo_subgrupo"] == ""
+    assert vote["texto_subgrupo"] == ""
+
+
+def test_votacion_de_conjunto_de_la_ley_de_discapacidad_fue_aprobada():
+    vote = parse_vote_xml(_xml_from_zip(54))
+    assert vote["a_favor"] == 179
+    assert vote["en_contra"] == 33
+    assert compute_resultado(vote["a_favor"], vote["en_contra"]) == "aprobada"

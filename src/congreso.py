@@ -63,6 +63,8 @@ def parse_vote_xml(xml_str):
         "fecha": info.findtext("Fecha", "").strip(),
         "titulo": info.findtext("Titulo", "").strip(),
         "texto_expediente": info.findtext("TextoExpediente", "").strip(),
+        "titulo_subgrupo": info.findtext("TituloSubGrupo", "").strip(),
+        "texto_subgrupo": info.findtext("TextoSubGrupo", "").strip(),
         "a_favor": int(totals.findtext("AFavor", 0)),
         "en_contra": int(totals.findtext("EnContra", 0)),
         "abstenciones": int(totals.findtext("Abstenciones", 0)),

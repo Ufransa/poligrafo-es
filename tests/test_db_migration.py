@@ -80,6 +80,17 @@ def test_insert_vote_stores_totals_and_resultado(tmp_path):
     conn.close()
 
 
+def test_migracion_v3_es_idempotente(tmp_path):
+    from src.db import init_db, get_conn
+    db = tmp_path / "m.db"
+    init_db(db)
+    init_db(db)  # segunda pasada: no debe reventar
+    conn = get_conn(db)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(votes)")}
+    assert {"titulo_subgrupo", "texto_subgrupo", "clase", "expediente_key"} <= cols
+    conn.close()
+
+
 def test_purge_only_runs_once(tmp_path):
     """Matches inserted AFTER the migration must survive a re-init."""
     db = tmp_path / "test.db"
