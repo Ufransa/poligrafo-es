@@ -80,6 +80,16 @@ def expediente_key(texto_expediente):
     return key
 
 
+def decode_vote_xml(raw):
+    """Los XML del Congreso vienen en ISO-8859-1 unos y UTF-8 otros.
+    utf-8 estricto primero: sin 'replace' aquí, o las tildes latin-1 se
+    corromperían en silencio en vez de caer al fallback."""
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("iso-8859-1", errors="replace")
+
+
 def parse_vote_xml(xml_str):
     """Parse a VOT_*.xml string. Returns a dict with vote metadata + aggregated group votes."""
     root = ET.fromstring(xml_str)
@@ -138,9 +148,6 @@ def download_session_zip(zip_url):
         for name in zf.namelist():
             if name.lower().endswith(".xml"):
                 raw = zf.read(name)
-                try:
-                    content = raw.decode("utf-8")
-                except UnicodeDecodeError:
-                    content = raw.decode("iso-8859-1", errors="replace")
+                content = decode_vote_xml(raw)
                 results.append((name, content))
     return results

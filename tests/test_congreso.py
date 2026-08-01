@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from src.congreso import parse_vote_xml, aggregate_group_votes, compute_resultado
+from src.congreso import parse_vote_xml, aggregate_group_votes, compute_resultado, decode_vote_xml
 
 FIXTURE_XML = (Path(__file__).parent / "fixtures" / "vote_session.xml").read_text(encoding="utf-8")
 
@@ -78,7 +78,7 @@ def _xml_from_zip(numero):
     with zipfile.ZipFile(FIXTURE_ZIP) as zf:
         for name in zf.namelist():
             if name.endswith(f"votacion{numero}.xml"):
-                return zf.read(name).decode("utf-8", "replace")
+                return decode_vote_xml(zf.read(name))
     raise AssertionError(f"votacion{numero} no está en el fixture")
 
 
@@ -142,3 +142,14 @@ def test_expediente_key_agrupa_el_dictamen_con_sus_enmiendas():
 def test_expediente_key_normaliza_espacios_y_mayusculas():
     from src.congreso import expediente_key
     assert expediente_key("  Proyecto   de LEY X ") == expediente_key("proyecto de ley x")
+
+
+def test_expediente_key_agrupa_sobre_datos_reales():
+    """El dictamen de la ley de discapacidad y sus enmiendas comparten clave.
+    Con un decode equivocado los prefijos con tilde no hacen match y salen 7."""
+    import zipfile
+    from src.congreso import expediente_key
+    with zipfile.ZipFile(FIXTURE_ZIP) as zf:
+        claves = {expediente_key(parse_vote_xml(decode_vote_xml(zf.read(n)))["texto_expediente"])
+                  for n in zf.namelist() if n.endswith(".xml")}
+    assert len(claves) == 6
