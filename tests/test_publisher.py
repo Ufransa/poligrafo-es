@@ -1,30 +1,49 @@
-from unittest.mock import patch, MagicMock
 from src.publisher import send_message, load_parties
 
 
-def test_load_parties_returns_known_codes():
-    parties = load_parties()
-    assert parties["GP"] == "PP"
-    assert parties["GS"] == "PSOE"
+class FakeResponse:
+    def __init__(self, status_code, payload):
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self):
+        return self._payload
 
 
-def test_send_message_returns_message_id_on_success():
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = {"ok": True, "result": {"message_id": 42}}
-
-    with patch("src.publisher.requests.post", return_value=mock_response):
-        msg_id = send_message("fake_token", "fake_channel", "Hello")
-
-    assert msg_id == 42
+def test_devuelve_message_id_en_exito(monkeypatch):
+    monkeypatch.setattr("src.publisher.requests.post",
+                        lambda *a, **k: FakeResponse(200, {"ok": True, "result": {"message_id": 7}}))
+    assert send_message("t", "c", "hola") == 7
 
 
-def test_send_message_returns_none_on_failure():
-    mock_response = MagicMock()
-    mock_response.status_code = 400
-    mock_response.json.return_value = {"ok": False, "description": "Bad Request"}
+def test_reintenta_tras_429_y_acaba_enviando(monkeypatch):
+    respuestas = [
+        FakeResponse(429, {"ok": False, "parameters": {"retry_after": 2}}),
+        FakeResponse(200, {"ok": True, "result": {"message_id": 9}}),
+    ]
+    monkeypatch.setattr("src.publisher.requests.post", lambda *a, **k: respuestas.pop(0))
+    esperas = []
+    assert send_message("t", "c", "hola", sleep=esperas.append) == 9
+    assert esperas == [2]  # respeta el retry_after que dice Telegram
 
-    with patch("src.publisher.requests.post", return_value=mock_response):
-        msg_id = send_message("fake_token", "fake_channel", "Hello")
 
-    assert msg_id is None
+def test_se_rinde_tras_agotar_reintentos(monkeypatch):
+    monkeypatch.setattr("src.publisher.requests.post",
+                        lambda *a, **k: FakeResponse(429, {"ok": False, "parameters": {"retry_after": 1}}))
+    assert send_message("t", "c", "hola", max_retries=2, sleep=lambda s: None) is None
+
+
+def test_error_no_429_no_reintenta(monkeypatch):
+    llamadas = []
+
+    def post(*a, **k):
+        llamadas.append(1)
+        return FakeResponse(400, {"ok": False, "description": "Bad Request: message is too long"})
+
+    monkeypatch.setattr("src.publisher.requests.post", post)
+    assert send_message("t", "c", "x", sleep=lambda s: None) is None
+    assert len(llamadas) == 1
+
+
+def test_load_parties_mapea_siglas():
+    assert load_parties()["GP"] == "PP"

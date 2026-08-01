@@ -241,6 +241,33 @@ def mark_digest_published(conn, vote_ids, boe_ids, telegram_message_id):
     conn.commit()
 
 
+def mark_votes_published(conn, vote_ids, telegram_message_id):
+    """Marca solo los votos indicados. Un envío parcial no reenvía el resto."""
+    if not vote_ids:
+        return
+    for vid in vote_ids:
+        conn.execute("UPDATE votes SET published=1 WHERE id=?", (vid,))
+    conn.execute(
+        "INSERT INTO published_messages (type, ref_id, telegram_message_id, sent_at)"
+        " VALUES ('expediente', NULL, ?, ?)",
+        (telegram_message_id, datetime.now(timezone.utc).isoformat()),
+    )
+    conn.commit()
+
+
+def mark_boe_published(conn, boe_ids, telegram_message_id):
+    if not boe_ids:
+        return
+    for bid in boe_ids:
+        conn.execute("UPDATE boe_entries SET published=1 WHERE id=?", (bid,))
+    conn.execute(
+        "INSERT INTO published_messages (type, ref_id, telegram_message_id, sent_at)"
+        " VALUES ('boe_block', NULL, ?, ?)",
+        (telegram_message_id, datetime.now(timezone.utc).isoformat()),
+    )
+    conn.commit()
+
+
 def insert_boe_entry(conn, identificador, titulo, rango, departamento, fecha, url_xml, categories, texto_preview):
     conn.execute(
         """INSERT OR IGNORE INTO boe_entries

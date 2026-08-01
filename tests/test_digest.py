@@ -102,3 +102,30 @@ def test_dry_run_does_not_mark_published(tmp_path, monkeypatch):
     conn = get_conn(db)
     assert len(get_votes_for_digest(conn)) == 1  # sigue pendiente para el lunes
     conn.close()
+
+
+def test_envio_parcial_marca_solo_lo_enviado(tmp_path, monkeypatch):
+    from src.db import init_db, get_conn, insert_session, insert_vote, get_votes_for_digest
+    import digest as digest_mod
+
+    db = tmp_path / "p.db"
+    init_db(db)
+    conn = get_conn(db)
+    sid = insert_session(conn, 1, "20260714")
+    for n in (1, 2):
+        insert_vote(conn, sid, n, "Ley", f"Proyecto de Ley {n}", "14/7/2026",
+                    clase="sustantiva", expediente_key=f"proyecto de ley {n}",
+                    resultado="aprobada")
+    conn.close()
+
+    enviados = [11, None]  # el segundo bloque falla
+    monkeypatch.setattr(digest_mod, "TOKEN", "t")
+    monkeypatch.setattr(digest_mod, "CHANNEL", "c")
+    monkeypatch.setattr(digest_mod, "send_message", lambda *a, **k: enviados.pop(0))
+    monkeypatch.setattr(digest_mod.time, "sleep", lambda s: None)
+    digest_mod.run(db_path=db)
+
+    conn = get_conn(db)
+    pendientes = get_votes_for_digest(conn)
+    assert len(pendientes) == 1  # el que falló sigue pendiente, el otro no vuelve
+    conn.close()
