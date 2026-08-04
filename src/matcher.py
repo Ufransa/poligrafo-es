@@ -1,6 +1,15 @@
 # src/matcher.py
-import re
 import json
+
+import numpy as np
+
+from src.embeddings import embed_texts, from_blob
+
+# Medido sobre los 541 chunks únicos: e5-small comprime las similitudes en
+# 0.80-0.89, así que 0.80 dejaba pasar el 100%. A 0.85 un tratado bilateral no
+# encuentra ningún candidato (que es lo correcto) y una ley doméstica encuentra
+# entre 15 y 60.
+MIN_SIMILARITY = 0.85
 
 
 def load_categories(config_path="config/categories.json"):
@@ -21,46 +30,41 @@ def categorize_text(text, categories):
     ]
 
 
-_STOPWORDS = {
-    "para", "como", "este", "esta", "estos", "estas", "sobre",
-    "todos", "todas", "entre", "cuando", "hasta", "desde", "según",
-    "tanto", "todo", "toda", "donde", "dicha", "dicho",
-    "proyecto", "real", "decreto", "artículo", "artículos",
-    "medida", "medidas", "españa", "español", "española",
-}
-
-
-def _keywords(text):
-    """Extract significant words (5+ chars, not stopwords) from text."""
-    words = set(re.findall(r'\b[a-záéíóúüñ]{5,}\b', text.lower()))
-    return words - _STOPWORDS
-
-
-def top_candidates_per_party(vote_text, chunks, per_party=5):
+def top_candidates_per_party(vote_text, chunks, per_party=3, min_similarity=MIN_SIMILARITY):
     """
-    Pre-filtro para el juez LLM: top-N chunks por partido por score de keywords.
-    vote_text: str (titulo + texto_expediente)
-    chunks: iterable de dicts/Rows con {id, party, text, page_start}
-    Returns: {party: [{chunk_id, party, score, text, page_start}, ...]} orden score desc
+    Top-N chunks por partido por similitud coseno con el texto de la votación.
+
+    A diferencia del prefiltro por keywords que sustituye, no premia a los
+    partidos con programas largos: el umbral es absoluto, no relativo.
     """
-    vote_kws = _keywords(vote_text)
-    if not vote_kws:
+    # La ingesta dejó cada extracto repetido ~5 veces (541 textos únicos de 2645).
+    # Sin deduplicar, el top-N de un partido son N copias de la misma promesa.
+    vistos = set()
+    unicos = []
+    for c in chunks:
+        if not c["embedding"]:
+            continue
+        clave = (c["party"], c["text"])
+        if clave in vistos:
+            continue
+        vistos.add(clave)
+        unicos.append(c)
+    chunks = unicos
+    if not chunks:
         return {}
 
-    seen = set()
+    consulta = embed_texts([vote_text], "query: ")[0]
+    matriz = np.vstack([from_blob(c["embedding"]) for c in chunks])
+    similitudes = matriz @ consulta
+
     by_party = {}
-    for chunk in chunks:
-        key = (chunk["id"], chunk["party"])
-        if key in seen:
-            continue
-        seen.add(key)
-        score = len(vote_kws & _keywords(chunk["text"]))
-        if score < 1:
+    for chunk, sim in zip(chunks, similitudes):
+        if sim < min_similarity:
             continue
         by_party.setdefault(chunk["party"], []).append({
             "chunk_id": chunk["id"],
             "party": chunk["party"],
-            "score": score,
+            "score": float(sim),
             "text": chunk["text"],
             "page_start": chunk["page_start"],
         })

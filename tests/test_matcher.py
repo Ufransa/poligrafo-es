@@ -43,53 +43,57 @@ def test_load_categories_returns_dict_with_known_keys():
     assert len(cats) == 12
 
 
-# --- top_candidates_per_party (pre-filtro para el juez LLM, v2) ---
+# --- top_candidates_per_party (similitud coseno sobre embeddings, v3) ---
 
+import numpy as np
 from src.matcher import top_candidates_per_party
 
 
-def _chunk(cid, party, text, page=1):
-    return {"id": cid, "party": party, "text": text, "page_start": page}
+def _fake_chunk(cid, party, text, vector):
+    v = np.array(vector, dtype=np.float32)
+    v = v / np.linalg.norm(v)
+    return {"id": cid, "party": party, "text": text, "page_start": 10,
+            "embedding": v.tobytes()}
 
 
-VOTE_TEXT = "Proposición de ley sobre vivienda y alquiler asequible para jóvenes"
-
-
-def test_top_candidates_returns_dict_keyed_by_party():
+def test_devuelve_candidatos_por_encima_del_umbral(monkeypatch):
+    # El voto apunta en la dirección [1,0]; el chunk A coincide, el B es ortogonal.
+    monkeypatch.setattr("src.matcher.embed_texts",
+                        lambda textos, prefijo: np.array([[1.0, 0.0]], dtype=np.float32))
     chunks = [
-        _chunk(1, "PP", "garantizar vivienda y alquiler asequible jóvenes"),
-        _chunk(2, "PSOE", "vivienda alquiler asequible para todos los jóvenes"),
+        _fake_chunk(1, "PP", "accesibilidad universal", [1.0, 0.02]),
+        _fake_chunk(2, "PP", "política pesquera", [0.0, 1.0]),
     ]
-    result = top_candidates_per_party(VOTE_TEXT, chunks)
-    assert set(result.keys()) == {"PP", "PSOE"}
+    res = top_candidates_per_party("ley de discapacidad", chunks, min_similarity=0.80)
+    assert [c["chunk_id"] for c in res["PP"]] == [1]
 
 
-def test_top_candidates_caps_at_five_per_party():
-    chunks = [
-        _chunk(i, "PP", f"vivienda alquiler asequible jóvenes propuesta {i}")
-        for i in range(1, 9)
-    ]
-    result = top_candidates_per_party(VOTE_TEXT, chunks)
-    assert len(result["PP"]) == 5
+def test_no_hay_sesgo_por_numero_de_chunks(monkeypatch):
+    # PSOE tiene 5 chunks irrelevantes, PNV tiene 1 relevante. Debe ganar PNV.
+    monkeypatch.setattr("src.matcher.embed_texts",
+                        lambda textos, prefijo: np.array([[1.0, 0.0]], dtype=np.float32))
+    chunks = [_fake_chunk(i, "PSOE", "irrelevante", [0.0, 1.0]) for i in range(5)]
+    chunks.append(_fake_chunk(99, "PNV", "accesibilidad", [1.0, 0.01]))
+    res = top_candidates_per_party("ley de discapacidad", chunks, min_similarity=0.80)
+    assert "PSOE" not in res
+    assert [c["chunk_id"] for c in res["PNV"]] == [99]
 
 
-def test_top_candidates_sorted_by_score_desc():
-    chunks = [
-        _chunk(1, "PP", "vivienda"),
-        _chunk(2, "PP", "vivienda alquiler asequible jóvenes"),
-    ]
-    result = top_candidates_per_party(VOTE_TEXT, chunks)
-    assert result["PP"][0]["chunk_id"] == 2
-    assert result["PP"][0]["score"] > result["PP"][1]["score"]
+def test_deduplica_extractos_repetidos(monkeypatch):
+    # La ingesta repitió cada extracto ~5 veces; el top-N no puede ser N copias
+    # de la misma promesa.
+    monkeypatch.setattr("src.matcher.embed_texts",
+                        lambda textos, prefijo: np.array([[1.0, 0.0]], dtype=np.float32))
+    chunks = [_fake_chunk(i, "PP", "accesibilidad universal", [1.0, 0.01]) for i in range(5)]
+    chunks.append(_fake_chunk(99, "PP", "otra promesa distinta", [1.0, 0.02]))
+    res = top_candidates_per_party("ley", chunks, per_party=3, min_similarity=0.80)
+    assert len(res["PP"]) == 2
+    assert {c["text"] for c in res["PP"]} == {"accesibilidad universal", "otra promesa distinta"}
 
 
-def test_top_candidates_zero_score_chunks_excluded():
-    chunks = [_chunk(1, "VOX", "pesca fluvial trucha sostenible")]
-    result = top_candidates_per_party(VOTE_TEXT, chunks)
-    assert "VOX" not in result
-
-
-def test_top_candidates_carry_page_start():
-    chunks = [_chunk(7, "PSOE", "vivienda alquiler asequible", page=45)]
-    result = top_candidates_per_party(VOTE_TEXT, chunks)
-    assert result["PSOE"][0]["page_start"] == 45
+def test_limita_a_per_party_candidatos(monkeypatch):
+    monkeypatch.setattr("src.matcher.embed_texts",
+                        lambda textos, prefijo: np.array([[1.0, 0.0]], dtype=np.float32))
+    chunks = [_fake_chunk(i, "PP", f"texto {i}", [1.0, 0.01 * i]) for i in range(10)]
+    res = top_candidates_per_party("ley", chunks, per_party=3, min_similarity=0.80)
+    assert len(res["PP"]) == 3

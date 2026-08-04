@@ -95,6 +95,8 @@ _VOTE_V3_COLUMNS = {
     "clase": "TEXT",
     "expediente_key": "TEXT",
 }
+_CHUNK_V3_COLUMNS = {"embedding": "BLOB"}
+_MATCH_V3_COLUMNS = {"promesa": "TEXT", "veredicto": "TEXT"}
 
 # El BOE publica a diario cientos de nombramientos, resoluciones y subvenciones.
 # Solo las normas con fuerza de ley cambian derechos: el resto es ruido de boletín.
@@ -116,6 +118,14 @@ def _migrate(conn):
     for col, ctype in _VOTE_V3_COLUMNS.items():
         if col not in vote_cols:
             conn.execute(f"ALTER TABLE votes ADD COLUMN {col} {ctype}")
+    chunk_cols = {r[1] for r in conn.execute("PRAGMA table_info(program_chunks)")}
+    for col, ctype in _CHUNK_V3_COLUMNS.items():
+        if col not in chunk_cols:
+            conn.execute(f"ALTER TABLE program_chunks ADD COLUMN {col} {ctype}")
+    match_cols = {r[1] for r in conn.execute("PRAGMA table_info(vote_program_matches)")}
+    for col, ctype in _MATCH_V3_COLUMNS.items():
+        if col not in match_cols:
+            conn.execute(f"ALTER TABLE vote_program_matches ADD COLUMN {col} {ctype}")
     if first_time:
         conn.execute("DELETE FROM vote_program_matches")
     conn.commit()
@@ -306,28 +316,34 @@ def insert_program_chunk(conn, party, category, page_start, text):
     return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
 
 
+def set_chunk_embedding(conn, chunk_id, blob):
+    conn.execute("UPDATE program_chunks SET embedding=? WHERE id=?", (blob, chunk_id))
+    conn.commit()
+
+
 def get_all_program_chunks(conn):
     return conn.execute(
-        "SELECT id, party, category, page_start, text FROM program_chunks"
+        "SELECT id, party, category, page_start, text, embedding FROM program_chunks"
     ).fetchall()
 
 
-def insert_vote_program_match(conn, vote_id, chunk_id, party, score):
+def insert_vote_program_match(conn, vote_id, chunk_id, party, score, promesa, veredicto):
     conn.execute(
-        """INSERT OR IGNORE INTO vote_program_matches (vote_id, chunk_id, party, score)
-           VALUES (?,?,?,?)""",
-        (vote_id, chunk_id, party, score),
+        """INSERT OR IGNORE INTO vote_program_matches
+           (vote_id, chunk_id, party, score, promesa, veredicto)
+           VALUES (?,?,?,?,?,?)""",
+        (vote_id, chunk_id, party, score, promesa, veredicto),
     )
     conn.commit()
 
 
 def get_validated_matches(conn, vote_id):
-    """Matches validados por el juez LLM, con texto y página del programa."""
+    """Solo matches con veredicto: un extracto sin conclusión es ruido."""
     return conn.execute(
-        """SELECT vm.party, pc.text, pc.page_start
+        """SELECT vm.party, vm.promesa, vm.veredicto, pc.page_start
            FROM vote_program_matches vm
            JOIN program_chunks pc ON vm.chunk_id = pc.id
-           WHERE vm.vote_id = ?
+           WHERE vm.vote_id = ? AND vm.veredicto IS NOT NULL
            ORDER BY vm.party""",
         (vote_id,),
     ).fetchall()
