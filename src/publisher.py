@@ -12,10 +12,29 @@ def load_parties(config_path="config/parties.json"):
         return json.load(f)
 
 
+def normalizar_grupo(titulo_subgrupo):
+    """
+    El XML alterna el mismo grupo con y sin punto final ("...VOX" y "...VOX."),
+    así que la clave del mapa se normaliza en ambos lados.
+    """
+    return " ".join((titulo_subgrupo or "").split()).rstrip(".").lower()
+
+
+class _MapaGrupos(dict):
+    """dict cuyo .get() normaliza la clave antes de buscarla."""
+
+    def get(self, clave, defecto=None):
+        return super().get(normalizar_grupo(clave), defecto)
+
+    def __contains__(self, clave):
+        return super().__contains__(normalizar_grupo(clave))
+
+
 def load_parties_largo(config_path="config/grupos_enmienda.json"):
     """Nombres largos de grupo tal como vienen en TituloSubGrupo → etiqueta corta."""
     with open(config_path, encoding="utf-8") as f:
-        return json.load(f)
+        crudo = json.load(f)
+    return _MapaGrupos({normalizar_grupo(k): v for k, v in crudo.items()})
 
 
 def send_message(token, channel_id, text, max_retries=TELEGRAM_MAX_RETRIES, sleep=time.sleep):

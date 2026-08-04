@@ -41,6 +41,12 @@ _VEREDICTO_TEXTO = {
     "incumple": "Incoherente con su programa.",
 }
 
+# El juez emitía veredictos contradictorios porque el prompt no le decía cómo
+# había votado cada partido (dry-run del 2026-08-04: misma promesa de Sumar,
+# mismo sentido de voto, "coherente" en una ficha e "incoherente" en la
+# siguiente). Se guardan en la base pero no se publican hasta validarlos.
+PUBLICAR_VEREDICTOS = False
+
 
 def format_expediente_block(exp, parties, grupos_largos):
     """Una ficha por ley: qué se votó, cómo acabó, quién votó qué."""
@@ -55,7 +61,10 @@ def format_expediente_block(exp, parties, grupos_largos):
         totales = ""
         if sus.get("a_favor") is not None and sus.get("en_contra") is not None:
             totales = f" ({sus['a_favor']} a favor / {sus['en_contra']} en contra)"
-        lines.append(f"{resultado}{totales}")
+        # La fecha distingue dos expedientes con el mismo título oficial, que el
+        # Congreso vota más de una vez (p.ej. los objetivos de estabilidad).
+        fecha = f" · {sus['fecha']}" if sus.get("fecha") else ""
+        lines.append(f"{resultado}{totales}{fecha}")
     if sus.get("que_cambia"):
         lines.append(html.escape(sus["que_cambia"]))
 
@@ -84,7 +93,8 @@ def format_expediente_block(exp, parties, grupos_largos):
         lines.append(f"🔎 {len(parciales)} enmiendas votadas antes del texto final.")
         lines.append(f"   {html.escape(detalle)}")
 
-    veredictos = [m for m in exp.get("matches", []) if m.get("veredicto")]
+    veredictos = [m for m in exp.get("matches", []) if m.get("veredicto")] \
+        if PUBLICAR_VEREDICTOS else []
     if veredictos:
         lines.append("")
         for m in veredictos:

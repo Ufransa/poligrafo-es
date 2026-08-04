@@ -1,4 +1,4 @@
-from src.publisher import send_message, load_parties
+from src.publisher import send_message, load_parties, load_parties_largo
 
 
 class FakeResponse:
@@ -47,3 +47,16 @@ def test_error_no_429_no_reintenta(monkeypatch):
 
 def test_load_parties_mapea_siglas():
     assert load_parties()["GP"] == "PP"
+
+
+def test_mapa_de_grupos_ignora_el_punto_final():
+    """El XML alterna '...VOX' y '...VOX.' para el mismo grupo."""
+    largos = load_parties_largo()
+    assert largos.get("Enmiendas presentadas por el Grupo Parlamentario VOX") == "Vox"
+    assert largos.get("Enmiendas presentadas por el Grupo Parlamentario VOX.") == "Vox"
+    assert largos.get("  Enmiendas   presentadas por el Grupo Parlamentario VOX ") == "Vox"
+
+
+def test_grupo_desconocido_devuelve_el_defecto():
+    largos = load_parties_largo()
+    assert largos.get("Grupo Parlamentario Inventado", "fallback") == "fallback"

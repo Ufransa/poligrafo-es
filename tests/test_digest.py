@@ -44,14 +44,18 @@ def test_ficha_agrega_las_enmiendas_en_una_linea():
     assert "Enmienda 174" not in block  # el detalle no se publica
 
 
-def test_ficha_publica_veredicto_no_extracto_crudo():
+def test_ficha_publica_veredicto_no_extracto_crudo(monkeypatch):
+    import digest as digest_mod
+    monkeypatch.setattr(digest_mod, "PUBLICAR_VEREDICTOS", True)
     block = format_expediente_block(EXPEDIENTE, PARTIES, GRUPOS_LARGOS)
     assert "blindar por ley" in block
     assert "p.30" in block
     assert "Incoherente" in block
 
 
-def test_match_sin_veredicto_no_se_publica():
+def test_match_sin_veredicto_no_se_publica(monkeypatch):
+    import digest as digest_mod
+    monkeypatch.setattr(digest_mod, "PUBLICAR_VEREDICTOS", True)
     exp = {**EXPEDIENTE, "matches": [
         {"party": "PSOE", "promesa": "algo", "veredicto": None, "page_start": 10}]}
     block = format_expediente_block(exp, PARTIES, GRUPOS_LARGOS)
@@ -146,3 +150,20 @@ def test_envio_parcial_marca_solo_lo_enviado(tmp_path, monkeypatch):
     pendientes = get_votes_for_digest(conn)
     assert len(pendientes) == 1  # el que falló sigue pendiente, el otro no vuelve
     conn.close()
+
+
+def test_no_publica_veredictos_cuando_el_flag_esta_apagado(monkeypatch):
+    """El juez aún da veredictos contradictorios; hasta que se afine, no salen."""
+    import digest as digest_mod
+    monkeypatch.setattr(digest_mod, "PUBLICAR_VEREDICTOS", False)
+    block = format_expediente_block(EXPEDIENTE, PARTIES, GRUPOS_LARGOS)
+    assert "blindar por ley" not in block
+    assert "Incoherente" not in block
+    assert "APROBADA" in block  # el resto de la ficha sigue intacto
+
+
+def test_ficha_muestra_la_fecha_de_la_votacion():
+    """Dos expedientes homonimos solo se distinguen por fecha y totales."""
+    exp = {**EXPEDIENTE, "sustantiva": {**EXPEDIENTE["sustantiva"], "fecha": "14/7/2026"}}
+    block = format_expediente_block(exp, PARTIES, GRUPOS_LARGOS)
+    assert "14/7/2026" in block
