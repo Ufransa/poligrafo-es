@@ -10,6 +10,11 @@ Backfill v3: reclasifica los votos existentes y prepara el estado del canal.
   informe acumulado, pero no vuelven al canal.
 """
 import sys
+from pathlib import Path
+
+# Se invoca como `python3 scripts/reclasificar_v3.py` desde la raíz: sys.path[0]
+# es scripts/, no el repo, así que `src` no se encontraría.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.db import init_db, get_conn
 from src.congreso import (download_session_zip, parse_vote_xml, classify_vote,
