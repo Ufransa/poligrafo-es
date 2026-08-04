@@ -96,6 +96,10 @@ _VOTE_V3_COLUMNS = {
     "expediente_key": "TEXT",
 }
 
+# El BOE publica a diario cientos de nombramientos, resoluciones y subvenciones.
+# Solo las normas con fuerza de ley cambian derechos: el resto es ruido de boletín.
+RANGOS_CON_FUERZA_DE_LEY = ("Ley", "Ley Orgánica", "Real Decreto-ley", "Decreto-ley")
+
 
 def _migrate(conn):
     """Añade columnas v2/v3 si faltan. La primera vez purga los matches legacy
@@ -284,8 +288,12 @@ def insert_boe_entry(conn, identificador, titulo, rango, departamento, fecha, ur
 
 
 def get_boe_for_digest(conn):
+    marcas = ",".join("?" * len(RANGOS_CON_FUERZA_DE_LEY))
     return conn.execute(
-        "SELECT * FROM boe_entries WHERE published=0 AND categories != '[]' ORDER BY fecha, id"
+        f"""SELECT * FROM boe_entries
+            WHERE published=0 AND categories != '[]' AND rango IN ({marcas})
+            ORDER BY fecha, id""",
+        RANGOS_CON_FUERZA_DE_LEY,
     ).fetchall()
 
 
@@ -345,10 +353,14 @@ def set_vote_enrichment(conn, vote_id, resumen, que_cambia):
 
 
 def get_unenriched_boe_entries(conn):
+    """El filtro de rango también evita gastar API en normas que no se publicarán."""
+    marcas = ",".join("?" * len(RANGOS_CON_FUERZA_DE_LEY))
     return conn.execute(
-        """SELECT * FROM boe_entries
-           WHERE enriched_at IS NULL AND published = 0 AND categories != '[]'
-           ORDER BY id"""
+        f"""SELECT * FROM boe_entries
+            WHERE enriched_at IS NULL AND published = 0
+              AND categories != '[]' AND rango IN ({marcas})
+            ORDER BY id""",
+        RANGOS_CON_FUERZA_DE_LEY,
     ).fetchall()
 
 

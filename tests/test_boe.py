@@ -159,3 +159,25 @@ def test_fetch_boe_sumario_returns_none_on_json_error():
     with patch("src.boe.requests.get", return_value=mock_resp):
         result = fetch_boe_sumario("20260515")
     assert result is None
+
+
+def test_digest_boe_solo_incluye_rangos_con_fuerza_de_ley(tmp_path):
+    from src.db import init_db, get_conn, insert_boe_entry, get_boe_for_digest
+    db = tmp_path / "b.db"
+    init_db(db)
+    conn = get_conn(db)
+    casos = [
+        ("BOE-A-1", "Ley 5/2026 de vivienda", "Ley"),
+        ("BOE-A-2", "Ley Orgánica 2/2026", "Ley Orgánica"),
+        ("BOE-A-3", "Real Decreto-ley 9/2026", "Real Decreto-ley"),
+        ("BOE-A-4", "Real Decreto 300/2026 de nombramiento", "Real Decreto"),
+        ("BOE-A-5", "Resolución de la Subsecretaría", "Resolución"),
+        ("BOE-A-6", "Ley Foral 3/2026 de Navarra", "Ley Foral"),
+    ]
+    for ident, titulo, rango in casos:
+        insert_boe_entry(conn, ident, titulo, rango, "Dpto", "20260714",
+                         "url", ["vivienda"], "texto")
+
+    idents = {r["identificador"] for r in get_boe_for_digest(conn)}
+    assert idents == {"BOE-A-1", "BOE-A-2", "BOE-A-3"}
+    conn.close()
