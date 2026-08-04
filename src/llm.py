@@ -53,9 +53,18 @@ de voto del partido en esta votación: "cumple" si votó en coherencia con lo qu
 prometió, "incumple" si votó en contra de lo que prometió.
   · Si hay extracto pertinente pero no puedes afirmar con seguridad si cumple o \
 incumple: veredicto null. Es preferible el silencio a un veredicto dudoso.
+  · Usa el bloque SENTIDO DE VOTO. Si un partido no aparece ahí, no sabes cómo votó: \
+veredicto null SIEMPRE.
+  · Una ABSTENCIÓN nunca es "cumple": abstenerse no ejecuta ninguna promesa. Si el \
+partido se abstuvo, el veredicto es "incumple" solo cuando prometió explícitamente \
+actuar en esa materia; en cualquier otro caso, null.
   · Compartir vocabulario NO es pronunciarse. Para tratados internacionales, solo hay \
 match si el extracto menciona ese país, ese tipo de acuerdo bilateral o esa \
 política exterior concreta. En caso de duda, null.
+  · Una promesa sobre PROCEDIMIENTO parlamentario (uso de la urgencia, del decreto-ley, \
+del reglamento) NO es un pronunciamiento sobre la MATERIA que se vota: null.
+  · Promesas genéricas de cooperación, diálogo, eficiencia o modernización no son \
+pronunciamientos concretos sobre nada: null.
 - Neutralidad absoluta: describe, no opines ni califiques."""
 
 _SYSTEM_BOE = """Eres el redactor de PolígrafoES. Resumes entradas del BOE para un \
@@ -80,6 +89,22 @@ def build_expediente_prompt(expediente, candidates):
         f"Resultado: {expediente['resultado']} "
         f"({expediente['a_favor']} a favor / {expediente['en_contra']} en contra)",
     ]
+    votos = expediente.get("votos_por_partido") or {}
+    if votos:
+        partes.append("\nSENTIDO DE VOTO DE CADA PARTIDO EN ESTA VOTACIÓN:")
+        for partido, voto in sorted(votos.items()):
+            partes.append(f"  {partido}: {voto}")
+
+    # "Enmienda a la totalidad" pide devolver el proyecto: votar Sí es tumbarlo
+    # y votar No es dejar que siga. Sin este aviso el juez leía el voto al revés.
+    titulo = (expediente.get("titulo") or "").lower()
+    if "totalidad" in titulo:
+        partes.append(
+            "\nAVISO: es una enmienda a la totalidad, que pide devolver el proyecto. "
+            "El sentido del voto se invierte respecto al contenido de la ley: votar "
+            "Sí es tumbar el proyecto, votar No es dejar que siga tramitándose."
+        )
+
     enmiendas = expediente.get("enmiendas") or []
     if enmiendas:
         partes.append(f"\nAntes del texto final hubo {len(enmiendas)} votaciones de enmiendas:")

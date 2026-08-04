@@ -185,6 +185,9 @@ def run(dry_run=False, db_path=None):
                 msg_id = send_message(TOKEN, CHANNEL, texto)
                 if msg_id:
                     mark_boe_published(conn, [r["id"] for r in boe_rows], msg_id)
+                    print(f"  Sent bloque BOE ({len(boe_rows)} normas) -> msg {msg_id}")
+                else:
+                    print("  WARN: falló el envío del bloque BOE; sigue pendiente")
                 time.sleep(THROTTLE_SECONDS)
 
         if dry_run:

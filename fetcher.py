@@ -15,7 +15,7 @@ from src.db import (
     init_db, get_conn,
     get_last_session_number, insert_session, insert_vote, insert_vote_groups,
     insert_boe_entry, get_all_program_chunks,
-    insert_vote_program_match, get_expedientes_for_digest,
+    insert_vote_program_match, get_expedientes_for_digest, get_vote_groups,
     get_unenriched_votes, set_vote_enrichment,
     get_unenriched_boe_entries, set_boe_enrichment,
 )
@@ -26,7 +26,7 @@ from src.congreso import (
 from src.boe import fetch_boe_sumario, extract_boe_items, fetch_boe_entry
 from src.matcher import categorize_text, load_categories, top_candidates_per_party
 from src.llm import enrich_expediente, summarize_boe
-from src.publisher import load_parties_largo
+from src.publisher import load_parties, load_parties_largo
 
 
 def enrich_pending(conn):
@@ -34,6 +34,7 @@ def enrich_pending(conn):
     Un fallo en uno no detiene el resto: queda NULL y se reintenta mañana."""
     all_chunks = [dict(c) for c in get_all_program_chunks(conn)]
     parties = load_parties_largo()
+    siglas = load_parties()
 
     for exp in get_expedientes_for_digest(conn):
         sus = exp["sustantiva"]
@@ -49,6 +50,12 @@ def enrich_pending(conn):
             candidates = top_candidates_per_party(
                 sus["texto_expediente"] + " " + (sus["titulo"] or ""), all_chunks
             )
+            # El juez necesita saber cómo votó cada partido para poder comparar
+            # la promesa con el voto; sin esto se lo inventaba.
+            votos_por_partido = {
+                siglas.get(g["grupo_code"], g["grupo_code"]): g["voto"]
+                for g in get_vote_groups(conn, sus["id"])
+            }
             enrichment = enrich_expediente(
                 {
                     "texto_expediente": sus["texto_expediente"],
@@ -57,6 +64,7 @@ def enrich_pending(conn):
                     "a_favor": sus["a_favor"],
                     "en_contra": sus["en_contra"],
                     "enmiendas": enmiendas,
+                    "votos_por_partido": votos_por_partido,
                 },
                 candidates,
             )

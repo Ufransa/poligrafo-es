@@ -122,3 +122,29 @@ def test_summarize_boe_returns_string():
              "departamento": "Ministerio de Vivienda", "texto_preview": "..."}
     result = summarize_boe(entry, client=client)
     assert result == "Nuevas ayudas al alquiler joven de hasta 250€/mes"
+
+
+def test_prompt_incluye_el_sentido_de_voto_de_cada_partido():
+    """
+    Sin esto el juez adivinaba: le pedíamos comparar la promesa con el sentido
+    de voto sin decirle cómo había votado nadie.
+    """
+    exp = {**EXPEDIENTE, "votos_por_partido": {
+        "PP": "Abstención", "PSOE": "Sí", "Vox": "No"}}
+    prompt = build_expediente_prompt(exp, {})
+    assert "PP: Abstención" in prompt
+    assert "PSOE: Sí" in prompt
+    assert "Vox: No" in prompt
+
+
+def test_prompt_avisa_de_que_una_enmienda_a_la_totalidad_invierte_el_voto():
+    exp = {**EXPEDIENTE,
+           "titulo": "Enmiendas a la totalidad de devolución.",
+           "votos_por_partido": {"PP": "Sí"}}
+    prompt = build_expediente_prompt(exp, {})
+    assert "invierte" in prompt.lower()
+
+
+def test_prompt_sin_votos_no_revienta():
+    prompt = build_expediente_prompt(EXPEDIENTE, {})
+    assert "aprobada" in prompt

@@ -6,10 +6,10 @@ import numpy as np
 from src.embeddings import embed_texts, from_blob
 
 # Medido sobre los 541 chunks únicos: e5-small comprime las similitudes en
-# 0.80-0.89, así que 0.80 dejaba pasar el 100%. A 0.85 un tratado bilateral no
-# encuentra ningún candidato (que es lo correcto) y una ley doméstica encuentra
-# entre 15 y 60.
-MIN_SIMILARITY = 0.85
+# 0.80-0.89, así que el 0.80 previsto dejaba pasar el 100%. A 0.85 quedaban
+# 15-60 candidatos por ley y el juez seguía convirtiendo promesas genéricas en
+# veredictos; a 0.87 quedan 5-9, todos con solape real de materia.
+MIN_SIMILARITY = 0.87
 
 
 def load_categories(config_path="config/categories.json"):
