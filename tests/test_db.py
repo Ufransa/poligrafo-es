@@ -136,20 +136,30 @@ def test_validated_match_stored_with_page(db):
     session_id = insert_session(db, 1, "20260515")
     vote_id = insert_vote(db, session_id, 1, "Ley de vivienda", "texto", "15/5/2026")
     chunk_id = insert_program_chunk(db, "PP", "vivienda", 7, "propuesta vivienda")
-    insert_vote_program_match(db, vote_id, chunk_id, "PP", score=3.0)
+    insert_vote_program_match(db, vote_id, chunk_id, "PP", 3.0,
+                              "construir 100.000 viviendas públicas", "incumple")
     matches = get_validated_matches(db, vote_id)
     assert len(matches) == 1
     assert matches[0]["party"] == "PP"
     assert matches[0]["page_start"] == 7
-    assert "vivienda" in matches[0]["text"]
+    assert "viviendas públicas" in matches[0]["promesa"]
+    assert matches[0]["veredicto"] == "incumple"
+
+
+def test_match_sin_veredicto_no_se_devuelve(db):
+    session_id = insert_session(db, 1, "20260515")
+    vote_id = insert_vote(db, session_id, 1, "Ley de vivienda", "texto", "15/5/2026")
+    chunk_id = insert_program_chunk(db, "PP", "vivienda", 7, "propuesta vivienda")
+    insert_vote_program_match(db, vote_id, chunk_id, "PP", 3.0, "algo", None)
+    assert get_validated_matches(db, vote_id) == []
 
 
 def test_insert_vote_program_match_is_idempotent(db):
     session_id = insert_session(db, 1, "20260515")
     vote_id = insert_vote(db, session_id, 1, "Ley", "texto", "15/5/2026")
     chunk_id = insert_program_chunk(db, "PP", "vivienda", 1, "texto")
-    insert_vote_program_match(db, vote_id, chunk_id, "PP", score=2.0)
-    insert_vote_program_match(db, vote_id, chunk_id, "PP", score=2.0)
+    insert_vote_program_match(db, vote_id, chunk_id, "PP", 2.0, "p", "cumple")
+    insert_vote_program_match(db, vote_id, chunk_id, "PP", 2.0, "p", "cumple")
     matches = get_validated_matches(db, vote_id)
     assert len(matches) == 1
 

@@ -1,4 +1,5 @@
-from src.llm import enrich_vote, summarize_boe, VoteEnrichment, PartyMatch, BoeSummary
+from src.llm import (enrich_expediente, summarize_boe, build_expediente_prompt,
+                     VoteEnrichment, PartyMatch, BoeSummary)
 
 
 class FakeResponse:
@@ -21,51 +22,98 @@ class FakeClient:
         self.messages = FakeMessages(parsed)
 
 
-VOTE = {"titulo": "Subida del SMI", "texto_expediente": "Se eleva el salario mínimo..."}
+EXPEDIENTE = {
+    "texto_expediente": "Proyecto de Ley de discapacidad",
+    "titulo": "Dictámenes de Comisiones sobre iniciativas legislativas.",
+    "resultado": "aprobada",
+    "a_favor": 179,
+    "en_contra": 33,
+    "enmiendas": [
+        {"grupo": "Junts", "detalle": "Enmienda 174.", "resultado": "rechazada"},
+        {"grupo": "PNV", "detalle": "Enmienda 14.", "resultado": "rechazada"},
+    ],
+}
+
 CANDIDATES = {
-    "PSOE": [{"chunk_id": 10, "party": "PSOE", "score": 4,
+    "PSOE": [{"chunk_id": 10, "party": "PSOE", "score": 0.87,
               "text": "Subiremos el SMI hasta el 60% del salario medio", "page_start": 45}],
-    "VOX": [{"chunk_id": 20, "party": "VOX", "score": 2,
+    "VOX": [{"chunk_id": 20, "party": "VOX", "score": 0.82,
              "text": "Reforma fiscal integral", "page_start": 12}],
 }
 
 
-def test_enrich_vote_returns_enrichment():
+def test_prompt_incluye_resultado_y_recuento_de_enmiendas():
+    prompt = build_expediente_prompt(EXPEDIENTE, {})
+    assert "aprobada" in prompt
+    assert "179" in prompt
+    assert "Junts" in prompt
+    assert "2 votaciones de enmiendas" in prompt
+
+
+def test_match_sin_veredicto_es_valido_pero_se_descarta_al_publicar():
+    m = PartyMatch(party="PP", chunk_id=None, promesa="", veredicto=None)
+    assert m.chunk_id is None
+    assert m.veredicto is None
+
+
+def test_match_con_veredicto_conserva_la_promesa():
+    m = PartyMatch(party="PP", chunk_id=12,
+                   promesa="blindar por ley el apoyo a la discapacidad",
+                   veredicto="incumple")
+    assert m.veredicto == "incumple"
+    assert "blindar" in m.promesa
+
+
+def test_enrich_expediente_devuelve_el_enriquecimiento():
     parsed = VoteEnrichment(
-        resumen="Subida del salario mínimo",
-        que_cambia="El SMI sube si completa el trámite.",
-        matches=[PartyMatch(party="PSOE", chunk_id=10)],
+        resumen="Ley de discapacidad aprobada",
+        que_cambia="Amplía prestaciones y accesibilidad universal.",
+        matches=[PartyMatch(party="PSOE", chunk_id=10, promesa="subir el SMI",
+                            veredicto="cumple")],
     )
     client = FakeClient(parsed)
-    result = enrich_vote(VOTE, CANDIDATES, client=client)
-    assert result.resumen == "Subida del salario mínimo"
+    result = enrich_expediente(EXPEDIENTE, CANDIDATES, client=client)
+    assert result.resumen == "Ley de discapacidad aprobada"
     assert result.matches[0].chunk_id == 10
 
 
-def test_enrich_vote_drops_hallucinated_chunk_ids():
+def test_enrich_expediente_descarta_chunk_ids_alucinados():
     parsed = VoteEnrichment(
         resumen="x", que_cambia="y",
         matches=[
-            PartyMatch(party="PSOE", chunk_id=10),    # real
-            PartyMatch(party="VOX", chunk_id=999),    # inventado por el modelo
-            PartyMatch(party="PP", chunk_id=None),    # sin match → fuera
+            PartyMatch(party="PSOE", chunk_id=10, promesa="p", veredicto="cumple"),
+            PartyMatch(party="VOX", chunk_id=999, promesa="p", veredicto="incumple"),
+            PartyMatch(party="PP", chunk_id=None, promesa="", veredicto=None),
         ],
     )
     client = FakeClient(parsed)
-    result = enrich_vote(VOTE, CANDIDATES, client=client)
+    result = enrich_expediente(EXPEDIENTE, CANDIDATES, client=client)
     assert [m.chunk_id for m in result.matches] == [10]
 
 
-def test_enrich_vote_prompt_contains_chunk_ids_and_model():
+def test_enrich_expediente_descarta_matches_sin_veredicto():
+    parsed = VoteEnrichment(
+        resumen="x", que_cambia="y",
+        matches=[
+            PartyMatch(party="PSOE", chunk_id=10, promesa="p", veredicto=None),
+            PartyMatch(party="VOX", chunk_id=20, promesa="p", veredicto="incumple"),
+        ],
+    )
+    client = FakeClient(parsed)
+    result = enrich_expediente(EXPEDIENTE, CANDIDATES, client=client)
+    assert [m.chunk_id for m in result.matches] == [20]
+
+
+def test_enrich_expediente_prompt_lleva_chunk_ids_y_modelo():
     parsed = VoteEnrichment(resumen="x", que_cambia="y", matches=[])
     client = FakeClient(parsed)
-    enrich_vote(VOTE, CANDIDATES, client=client)
+    enrich_expediente(EXPEDIENTE, CANDIDATES, client=client)
     kwargs = client.messages.last_kwargs
     assert kwargs["model"] == "claude-haiku-4-5"
     user_content = kwargs["messages"][0]["content"]
     assert "chunk_id=10" in user_content
     assert "chunk_id=20" in user_content
-    assert "Subida del SMI" in user_content
+    assert "Proyecto de Ley de discapacidad" in user_content
 
 
 def test_summarize_boe_returns_string():

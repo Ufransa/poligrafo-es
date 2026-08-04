@@ -12,6 +12,12 @@ def load_parties(config_path="config/parties.json"):
         return json.load(f)
 
 
+def load_parties_largo(config_path="config/grupos_enmienda.json"):
+    """Nombres largos de grupo tal como vienen en TituloSubGrupo → etiqueta corta."""
+    with open(config_path, encoding="utf-8") as f:
+        return json.load(f)
+
+
 def send_message(token, channel_id, text, max_retries=TELEGRAM_MAX_RETRIES, sleep=time.sleep):
     """
     Envía un mensaje al canal. Devuelve el message_id o None.

@@ -15,7 +15,7 @@ from src.db import (
     init_db, get_conn,
     get_last_session_number, insert_session, insert_vote, insert_vote_groups,
     insert_boe_entry, get_all_program_chunks,
-    insert_vote_program_match,
+    insert_vote_program_match, get_expedientes_for_digest,
     get_unenriched_votes, set_vote_enrichment,
     get_unenriched_boe_entries, set_boe_enrichment,
 )
@@ -25,35 +25,52 @@ from src.congreso import (
 )
 from src.boe import fetch_boe_sumario, extract_boe_items, fetch_boe_entry
 from src.matcher import categorize_text, load_categories, top_candidates_per_party
-from src.llm import enrich_vote, summarize_boe
+from src.llm import enrich_expediente, summarize_boe
+from src.publisher import load_parties_largo
 
 
 def enrich_pending(conn):
-    """Enriquece con LLM todos los items pendientes (enriched_at IS NULL).
-    Un fallo en un item no detiene el resto: queda NULL y se reintenta mañana."""
-    all_chunks = get_all_program_chunks(conn)
+    """Enriquece los expedientes pendientes (una llamada LLM por expediente).
+    Un fallo en uno no detiene el resto: queda NULL y se reintenta mañana."""
+    all_chunks = [dict(c) for c in get_all_program_chunks(conn)]
+    parties = load_parties_largo()
 
-    for row in get_unenriched_votes(conn):
+    for exp in get_expedientes_for_digest(conn):
+        sus = exp["sustantiva"]
+        if sus["enriched_at"]:
+            continue
         try:
-            vote_text = row["titulo"] + " " + (row["texto_expediente"] or "")
-            candidates = top_candidates_per_party(vote_text, all_chunks)
-            enrichment = enrich_vote(
-                {"titulo": row["titulo"], "texto_expediente": row["texto_expediente"] or ""},
+            enmiendas = [
+                {"grupo": parties.get(p["titulo_subgrupo"], p["titulo_subgrupo"]),
+                 "detalle": p["texto_subgrupo"],
+                 "resultado": p["resultado"] or "desconocido"}
+                for p in exp["parciales"]
+            ]
+            candidates = top_candidates_per_party(
+                sus["texto_expediente"] + " " + (sus["titulo"] or ""), all_chunks
+            )
+            enrichment = enrich_expediente(
+                {
+                    "texto_expediente": sus["texto_expediente"],
+                    "titulo": sus["titulo"],
+                    "resultado": sus["resultado"],
+                    "a_favor": sus["a_favor"],
+                    "en_contra": sus["en_contra"],
+                    "enmiendas": enmiendas,
+                },
                 candidates,
             )
-            score_by_chunk = {
-                c["chunk_id"]: c["score"]
-                for cands in candidates.values() for c in cands
-            }
+            score_by_chunk = {c["chunk_id"]: c["score"]
+                              for cands in candidates.values() for c in cands}
             for m in enrichment.matches:
                 insert_vote_program_match(
-                    conn, row["id"], m.chunk_id, m.party,
-                    score_by_chunk.get(m.chunk_id, 0),
+                    conn, sus["id"], m.chunk_id, m.party,
+                    score_by_chunk.get(m.chunk_id, 0.0), m.promesa, m.veredicto,
                 )
-            set_vote_enrichment(conn, row["id"], enrichment.resumen, enrichment.que_cambia)
-            print(f"  Enriched vote {row['id']}: {enrichment.resumen}")
+            set_vote_enrichment(conn, sus["id"], enrichment.resumen, enrichment.que_cambia)
+            print(f"  Enriched expediente {sus['id']}: {enrichment.resumen}")
         except Exception as e:
-            print(f"  WARN: enrichment failed for vote {row['id']}: {e}")
+            print(f"  WARN: enrichment failed for expediente {sus['id']}: {e}")
 
     for row in get_unenriched_boe_entries(conn):
         try:

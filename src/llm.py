@@ -3,7 +3,7 @@ src/llm.py — PolígrafoES
 Enriquecimiento con Claude Haiku 4.5: resúmenes en español llano y juez de
 relevancia voto↔programa. Structured outputs vía Pydantic.
 """
-from typing import Optional
+from typing import Literal, Optional
 
 import anthropic
 from pydantic import BaseModel
@@ -13,7 +13,9 @@ MODEL = "claude-haiku-4-5"
 
 class PartyMatch(BaseModel):
     party: str
-    chunk_id: Optional[int]  # None si ningún extracto del partido es pertinente
+    chunk_id: Optional[int]      # None si ningún extracto del partido es pertinente
+    promesa: str                 # la promesa parafraseada en una línea; "" si no hay match
+    veredicto: Optional[Literal["cumple", "incumple"]]  # None si no se puede afirmar
 
 
 class VoteEnrichment(BaseModel):
@@ -42,13 +44,18 @@ ratifica el acuerdo." Nunca digas "aún requiere pasos" — el Congreso es la au
 jurídico inmediato."
   · Enmienda a la totalidad: si RECHAZADA → el proyecto de ley sigue tramitándose. \
 Si APROBADA → el proyecto cae completamente.
-- matches: por cada partido, devuelve el chunk_id del extracto que se pronuncia sobre \
-la materia CONCRETA que se vota, o null. Criterio estricto:
-  · Para tratados internacionales: solo hay match si el extracto menciona ese país \
-concreto, ese tipo de acuerdo bilateral específico, o esa política exterior concreta. \
-Temas domésticos genéricos con vocabulario similar (seguridad ciudadana, modernización \
-judicial, lucha contra la delincuencia) NO son match para un tratado bilateral.
-  · En general: compartir vocabulario NO es pronunciarse. En caso de duda, null.
+- matches: por cada partido con extractos, decide si ese partido se pronunció en su \
+programa sobre la materia CONCRETA que se vota.
+  · Si no se pronunció: chunk_id null, promesa "", veredicto null.
+  · Si se pronunció: chunk_id del extracto, promesa = esa promesa parafraseada en una \
+línea llana (máximo 15 palabras), y veredicto comparando la promesa con el sentido \
+de voto del partido en esta votación: "cumple" si votó en coherencia con lo que \
+prometió, "incumple" si votó en contra de lo que prometió.
+  · Si hay extracto pertinente pero no puedes afirmar con seguridad si cumple o \
+incumple: veredicto null. Es preferible el silencio a un veredicto dudoso.
+  · Compartir vocabulario NO es pronunciarse. Para tratados internacionales, solo hay \
+match si el extracto menciona ese país, ese tipo de acuerdo bilateral o esa \
+política exterior concreta. En caso de duda, null.
 - Neutralidad absoluta: describe, no opines ni califiques."""
 
 _SYSTEM_BOE = """Eres el redactor de PolígrafoES. Resumes entradas del BOE para un \
@@ -64,37 +71,52 @@ def _client():
     return anthropic.Anthropic()  # ANTHROPIC_API_KEY del entorno
 
 
-def enrich_vote(vote, candidates, client=None):
+def build_expediente_prompt(expediente, candidates):
+    """Construye el user prompt de una votación agrupada por expediente."""
+    partes = [
+        "VOTACIÓN:",
+        f"Asunto: {expediente['texto_expediente']}",
+        f"Tipo de sesión: {expediente['titulo']}",
+        f"Resultado: {expediente['resultado']} "
+        f"({expediente['a_favor']} a favor / {expediente['en_contra']} en contra)",
+    ]
+    enmiendas = expediente.get("enmiendas") or []
+    if enmiendas:
+        partes.append(f"\nAntes del texto final hubo {len(enmiendas)} votaciones de enmiendas:")
+        for e in enmiendas[:40]:
+            partes.append(f"  · {e['grupo']}: {e['detalle']} → {e['resultado']}")
+
+    for party, cands in candidates.items():
+        partes.append(f"\nExtractos del programa electoral de {party}:")
+        for c in cands:
+            partes.append(f"[chunk_id={c['chunk_id']}] (p.{c['page_start']}) {c['text'][:600]}")
+    if not candidates:
+        partes.append("\n(No hay extractos de programas candidatos para esta votación.)")
+
+    return "\n".join(partes)
+
+
+def enrich_expediente(expediente, candidates, client=None):
     """
-    vote: dict con 'titulo' y 'texto_expediente'.
-    candidates: {party: [{chunk_id, score, text, page_start}, ...]} (pre-filtro del matcher).
+    Una llamada por expediente en vez de una por votación.
     Returns: VoteEnrichment con matches filtrados a chunk_ids realmente candidatos.
     """
     client = client or _client()
-
-    parts = [
-        "VOTACIÓN:",
-        f"Título oficial: {vote['titulo']}",
-        f"Expediente: {(vote.get('texto_expediente') or '')[:1500]}",
-    ]
-    valid_ids = set()
-    for party, cands in candidates.items():
-        parts.append(f"\nExtractos del programa electoral de {party}:")
-        for c in cands:
-            valid_ids.add(c["chunk_id"])
-            parts.append(f"[chunk_id={c['chunk_id']}] (p.{c['page_start']}) {c['text'][:600]}")
-    if not candidates:
-        parts.append("\n(No hay extractos de programas candidatos para esta votación.)")
+    valid_ids = {c["chunk_id"] for cands in candidates.values() for c in cands}
 
     response = client.messages.parse(
         model=MODEL,
         max_tokens=2048,
         system=_SYSTEM_VOTE,
-        messages=[{"role": "user", "content": "\n".join(parts)}],
+        messages=[{"role": "user",
+                   "content": build_expediente_prompt(expediente, candidates)}],
         output_format=VoteEnrichment,
     )
     enrichment = response.parsed_output
-    enrichment.matches = [m for m in enrichment.matches if m.chunk_id in valid_ids]
+    enrichment.matches = [
+        m for m in enrichment.matches
+        if m.chunk_id in valid_ids and m.veredicto is not None
+    ]
     return enrichment
 
 

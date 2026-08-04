@@ -20,7 +20,8 @@ def _seed_vote(conn, session_number=300, published=0):
     sid = insert_session(conn, session_number, "20260611")
     vid = insert_vote(conn, sid, 1, "Proposición de Ley de vivienda",
                       "alquiler asequible jóvenes", "11/6/2026",
-                      a_favor=200, en_contra=140, abstenciones=10, resultado="aprobada")
+                      a_favor=200, en_contra=140, abstenciones=10, resultado="aprobada",
+                      clase="sustantiva", expediente_key="alquiler asequible jóvenes")
     conn.execute("UPDATE votes SET published=? WHERE id=?", (published, vid))
     conn.commit()
     return vid
@@ -38,11 +39,15 @@ def test_enrich_pending_stores_summary_and_matches(conn, monkeypatch):
     cid = insert_program_chunk(conn, "PSOE", "vivienda", 45,
                                "vivienda alquiler asequible jóvenes garantizado")
 
-    def fake_enrich(vote, candidates, client=None):
-        return VoteEnrichment(resumen="Ley de vivienda", que_cambia="Cambia X.",
-                              matches=[PartyMatch(party="PSOE", chunk_id=cid)])
+    def fake_enrich(expediente, candidates, client=None):
+        return VoteEnrichment(
+            resumen="Ley de vivienda", que_cambia="Cambia X.",
+            matches=[PartyMatch(party="PSOE", chunk_id=cid,
+                                promesa="alquiler asequible para jóvenes",
+                                veredicto="cumple")],
+        )
 
-    monkeypatch.setattr(fetcher, "enrich_vote", fake_enrich)
+    monkeypatch.setattr(fetcher, "enrich_expediente", fake_enrich)
     fetcher.enrich_pending(conn)
 
     row = conn.execute("SELECT * FROM votes WHERE id=?", (vid,)).fetchone()
@@ -51,15 +56,16 @@ def test_enrich_pending_stores_summary_and_matches(conn, monkeypatch):
     matches = conn.execute("SELECT * FROM vote_program_matches WHERE vote_id=?", (vid,)).fetchall()
     assert len(matches) == 1
     assert matches[0]["chunk_id"] == cid
+    assert matches[0]["veredicto"] == "cumple"
 
 
 def test_enrich_failure_leaves_item_pending(conn, monkeypatch):
     vid = _seed_vote(conn)
 
-    def boom(vote, candidates, client=None):
+    def boom(expediente, candidates, client=None):
         raise RuntimeError("api caída")
 
-    monkeypatch.setattr(fetcher, "enrich_vote", boom)
+    monkeypatch.setattr(fetcher, "enrich_expediente", boom)
     fetcher.enrich_pending(conn)  # no debe lanzar
 
     row = conn.execute("SELECT * FROM votes WHERE id=?", (vid,)).fetchone()
@@ -67,8 +73,8 @@ def test_enrich_failure_leaves_item_pending(conn, monkeypatch):
 
 
 def test_enrich_boe_stores_summary(conn, monkeypatch):
-    eid = insert_boe_entry(conn, "BOE-A-2026-1", "Real Decreto de ayudas",
-                           "Real Decreto", "Min. Vivienda", "2026-06-11",
+    eid = insert_boe_entry(conn, "BOE-A-2026-1", "Real Decreto-ley de ayudas",
+                           "Real Decreto-ley", "Min. Vivienda", "2026-06-11",
                            "http://x", ["vivienda"], "texto preview")
 
     monkeypatch.setattr(fetcher, "summarize_boe",
