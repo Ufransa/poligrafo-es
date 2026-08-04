@@ -6,9 +6,11 @@ Publica el digest semanal: plantilla pura sobre datos ya enriquecidos por el
 fetcher. Sin llamadas LLM. Publica todo lo published=0 y lo marca — un lunes
 fallido se recupera solo en el siguiente run.
 """
+import collections
 import html
 import os
 import sys
+import time
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -16,10 +18,11 @@ load_dotenv()
 
 from src.db import (
     DEFAULT_DB, init_db, get_conn,
-    get_votes_for_digest, get_boe_for_digest, get_validated_matches,
-    get_vote_groups, mark_digest_published,
+    get_expedientes_for_digest, get_boe_for_digest, get_validated_matches,
+    get_vote_groups, mark_votes_published, mark_boe_published,
 )
-from src.publisher import load_parties, send_message
+from src.publisher import (load_parties, load_parties_largo, send_message,
+                           THROTTLE_SECONDS)
 
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHANNEL = os.environ.get("TELEGRAM_CHANNEL_ID")
@@ -33,43 +36,65 @@ _SENSE_ICON = {"Sí": "✅", "No": "❌", "Abstención": "⚪", "No vota": "—"
 _RESULT_LABEL = {"aprobada": "✅ APROBADA", "rechazada": "❌ RECHAZADA"}
 
 
-def format_vote_block(vote, parties):
-    """
-    vote: dict {titulo, resumen, que_cambia, resultado,
-                groups: {code: {voto, divided}}, matches: [{party, text, page_start}]}
-    Enriquecido → resumen en cristiano + resultado + consecuencia.
-    Sin enriquecer → fallback al título oficial, sin inventar nada.
-    """
-    if vote.get("resumen"):
-        result = _RESULT_LABEL.get(vote.get("resultado"), "")
-        header = f"🗳️ <b>{html.escape(vote['resumen'])}</b>"
-        if result:
-            header += f" — {result}"
-        lines = [header, html.escape(vote.get("que_cambia") or "")]
-    else:
-        titulo = vote["titulo"]
-        short = html.escape(titulo[:120]) + ("…" if len(titulo) > 120 else "")
-        lines = [f"🗳️ <b>{short}</b>"]
+_VEREDICTO_TEXTO = {
+    "cumple": "Coherente con su programa.",
+    "incumple": "Incoherente con su programa.",
+}
 
+
+def format_expediente_block(exp, parties, grupos_largos):
+    """Una ficha por ley: qué se votó, cómo acabó, quién votó qué."""
+    sus = exp["sustantiva"]
+    lines = []
+
+    titulo = sus.get("resumen") or (sus["titulo"] or "")[:120]
+    lines.append(f"🗳️ <b>{html.escape(titulo)}</b>")
+
+    resultado = _RESULT_LABEL.get(sus.get("resultado"), "")
+    if resultado:
+        totales = ""
+        if sus.get("a_favor") is not None and sus.get("en_contra") is not None:
+            totales = f" ({sus['a_favor']} a favor / {sus['en_contra']} en contra)"
+        lines.append(f"{resultado}{totales}")
+    if sus.get("que_cambia"):
+        lines.append(html.escape(sus["que_cambia"]))
+
+    lines.append("")
     by_sense = {}
-    for code, gv in vote.get("groups", {}).items():
+    for code, gv in exp.get("groups", {}).items():
         name = parties.get(code, code)
         if gv.get("divided"):
             name += " (div.)"
         by_sense.setdefault(gv["voto"], []).append(name)
     for s in _SENSE_ORDER:
         if s in by_sense:
-            icon = _SENSE_ICON[s]
-            parties_str = " · ".join(by_sense[s])
-            lines.append(f"{icon} {_SENSE_LABEL[s]}: {html.escape(parties_str)}")
+            lines.append(
+                f"{_SENSE_ICON[s]} {_SENSE_LABEL[s]}: "
+                f"{html.escape(' · '.join(by_sense[s]))}"
+            )
 
-    for m in vote.get("matches", []):
-        excerpt = html.escape(m["text"][:200]) + ("…" if len(m["text"]) > 200 else "")
-        lines.append(
-            f"📋 <b>{html.escape(m['party'])}</b> en su programa (p.{m['page_start']}): <i>{excerpt}</i>"
+    parciales = exp.get("parciales") or []
+    if parciales:
+        por_grupo = collections.Counter(
+            grupos_largos.get(p["titulo_subgrupo"], p["titulo_subgrupo"])
+            for p in parciales
         )
+        detalle = " · ".join(f"{g} {n}" for g, n in por_grupo.most_common())
+        lines.append("")
+        lines.append(f"🔎 {len(parciales)} enmiendas votadas antes del texto final.")
+        lines.append(f"   {html.escape(detalle)}")
 
-    return "\n".join(line for line in lines if line)
+    veredictos = [m for m in exp.get("matches", []) if m.get("veredicto")]
+    if veredictos:
+        lines.append("")
+        for m in veredictos:
+            lines.append(
+                f"📋 <b>{html.escape(m['party'])}</b> prometió (p.{m['page_start']}): "
+                f"<i>{html.escape(m['promesa'])}</i> → "
+                f"{_VEREDICTO_TEXTO[m['veredicto']]}"
+            )
+
+    return "\n".join(lines)
 
 
 def format_boe_line(entry):
@@ -105,67 +130,55 @@ def run(dry_run=False, db_path=None):
     conn = get_conn(db_path)
     try:
         parties = load_parties()
-        vote_rows = get_votes_for_digest(conn)
+        grupos_largos = load_parties_largo()
+        expedientes = get_expedientes_for_digest(conn)
         boe_rows = get_boe_for_digest(conn)
 
-        print(f"Digest: {len(vote_rows)} votes, {len(boe_rows)} BOE entries pending.")
-        if not vote_rows and not boe_rows:
+        print(f"Digest: {len(expedientes)} expedientes, {len(boe_rows)} BOE pendientes.")
+        if not expedientes and not boe_rows:
             print("Nothing to digest this week.")
             return
 
-        blocks = []
-        for row in vote_rows:
-            groups = {
+        # Un mensaje por expediente: cada uno se marca en cuanto sale.
+        for exp in expedientes:
+            # get_expedientes_for_digest devuelve sqlite3.Row, que no tiene .get()
+            sus = dict(exp["sustantiva"])
+            exp["sustantiva"] = sus
+            exp["parciales"] = [dict(p) for p in exp["parciales"]]
+            exp["groups"] = {
                 g["grupo_code"]: {"voto": g["voto"], "divided": bool(g["divided"])}
-                for g in get_vote_groups(conn, row["id"])
+                for g in get_vote_groups(conn, sus["id"])
             }
-            vote = dict(row)
-            vote["groups"] = groups
-            vote["matches"] = [dict(m) for m in get_validated_matches(conn, row["id"])]
-            blocks.append(format_vote_block(vote, parties))
+            exp["matches"] = [dict(m) for m in get_validated_matches(conn, sus["id"])]
+            texto = format_expediente_block(exp, parties, grupos_largos)
+
+            if dry_run:
+                print(f"\n--- DRY RUN expediente {sus['id']} ---\n{texto}\n--- END ---")
+                continue
+
+            msg_id = send_message(TOKEN, CHANNEL, texto)
+            if msg_id:
+                ids = [sus["id"]] + [p["id"] for p in exp["parciales"]]
+                mark_votes_published(conn, ids, msg_id)
+                print(f"  Sent expediente {sus['id']} -> msg {msg_id}")
+            else:
+                print(f"  WARN: falló el envío del expediente {sus['id']}; sigue pendiente")
+            time.sleep(THROTTLE_SECONDS)
 
         if boe_rows:
-            boe_lines = ["📜 <b>BOE en cristiano</b>"]
+            boe_lines = ["📜 <b>BOE — normas con rango de ley</b>"]
             boe_lines += [format_boe_line(dict(r)) for r in boe_rows]
-            blocks.append("\n".join(boe_lines))
-
-        now = datetime.now()
-        header = (
-            f"📊 <b>Congreso — semana hasta el {now.day:02d}/{now.month:02d}/{now.year}</b>\n"
-            f"{len(vote_rows)} votaciones · {len(boe_rows)} leyes BOE relevantes"
-        )
-        footer = "PolígrafoES"
-
-        messages = build_messages(header, blocks, footer)
-
-        sent_ids = []
-        for i, text in enumerate(messages, 1):
-            if dry_run:
-                print(f"\n--- DRY RUN DIGEST (msg {i}/{len(messages)}) ---")
-                print(text)
-                print("--- END ---")
-                sent_ids.append(0)
-                continue
-            msg_id = send_message(TOKEN, CHANNEL, text)
-            if msg_id:
-                sent_ids.append(msg_id)
-                print(f"  Sent digest msg {i} -> Telegram msg {msg_id}")
-            else:
-                print(f"  WARN: Failed to send digest msg {i}")
+            for texto in build_messages("", ["\n".join(boe_lines)], "PolígrafoES"):
+                if dry_run:
+                    print(f"\n--- DRY RUN BOE ---\n{texto}\n--- END ---")
+                    continue
+                msg_id = send_message(TOKEN, CHANNEL, texto)
+                if msg_id:
+                    mark_boe_published(conn, [r["id"] for r in boe_rows], msg_id)
+                time.sleep(THROTTLE_SECONDS)
 
         if dry_run:
-            print("Dry run: items NOT marked as published.")
-        elif sent_ids and len(sent_ids) == len(messages):
-            mark_digest_published(
-                conn,
-                [r["id"] for r in vote_rows],
-                [r["id"] for r in boe_rows],
-                telegram_message_id=sent_ids[-1],
-            )
-            print("Marked items as published.")
-        else:
-            print("WARN: incomplete send; items remain pending for next run.")
-
+            print("\nDry run: nada marcado como publicado.")
         print("\nDone.")
     finally:
         conn.close()

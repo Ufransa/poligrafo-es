@@ -1,57 +1,74 @@
-# tests/test_digest.py — digest v2 (formato legible)
-from digest import format_vote_block, format_boe_line, build_messages
+# tests/test_digest.py — digest v3 (una ficha por ley)
+from digest import format_expediente_block, format_boe_line, build_messages
 
 PARTIES = {"GP": "PP", "GS": "PSOE", "GSUMAR": "Sumar", "GVOX": "Vox"}
 
-ENRICHED_VOTE = {
-    "titulo": "Proposición de Ley Orgánica de medidas en materia de salario mínimo",
-    "resumen": "Subida del SMI a 1.250€",
-    "que_cambia": "Se acepta tramitar la ley; aún no es definitiva.",
-    "resultado": "aprobada",
+GRUPOS_LARGOS = {"Enmiendas presentadas por el Grupo Parlamentario Junts per Catalunya": "Junts"}
+
+EXPEDIENTE = {
+    "sustantiva": {
+        "titulo": "Dictámenes de Comisiones sobre iniciativas legislativas.",
+        "resumen": "Ley de discapacidad: más accesibilidad, autonomía y dependencia",
+        "que_cambia": "Ya es ley: amplía prestaciones y accesibilidad universal.",
+        "resultado": "aprobada", "a_favor": 179, "en_contra": 33,
+    },
+    "parciales": [
+        {"titulo_subgrupo": "Enmiendas presentadas por el Grupo Parlamentario Junts per Catalunya",
+         "texto_subgrupo": "Enmienda 174.", "resultado": "rechazada"},
+        {"titulo_subgrupo": "Enmiendas presentadas por el Grupo Parlamentario Junts per Catalunya",
+         "texto_subgrupo": "Enmienda 178.", "resultado": "rechazada"},
+    ],
     "groups": {
         "GS": {"voto": "Sí", "divided": False},
-        "GSUMAR": {"voto": "Sí", "divided": False},
-        "GP": {"voto": "No", "divided": False},
-        "GVOX": {"voto": "No", "divided": True},
+        "GP": {"voto": "Abstención", "divided": False},
+        "GVOX": {"voto": "No", "divided": False},
     },
     "matches": [
-        {"party": "PSOE", "text": "Subiremos el SMI hasta el 60% del salario medio", "page_start": 45},
+        {"party": "PP", "promesa": "blindar por ley el apoyo a la discapacidad",
+         "veredicto": "incumple", "page_start": 30},
     ],
 }
 
-RAW_VOTE = {
-    "titulo": "Toma en consideración de la Proposición de Ley X",
-    "resumen": None, "que_cambia": None, "resultado": None,
-    "groups": {"GP": {"voto": "No", "divided": False}},
-    "matches": [],
-}
+
+def test_ficha_muestra_resultado_real_con_totales():
+    block = format_expediente_block(EXPEDIENTE, PARTIES, GRUPOS_LARGOS)
+    assert "APROBADA" in block
+    assert "179" in block and "33" in block
+    assert "RECHAZADA" not in block
 
 
-def test_enriched_vote_shows_resumen_and_resultado():
-    block = format_vote_block(ENRICHED_VOTE, PARTIES)
-    assert "Subida del SMI a 1.250€" in block
-    assert "✅ APROBADA" in block
-    assert "aún no es definitiva" in block
+def test_ficha_agrega_las_enmiendas_en_una_linea():
+    block = format_expediente_block(EXPEDIENTE, PARTIES, GRUPOS_LARGOS)
+    assert "2 enmiendas" in block
+    assert "Junts 2" in block
+    assert "Enmienda 174" not in block  # el detalle no se publica
 
 
-def test_parties_grouped_by_sense_with_full_names():
-    block = format_vote_block(ENRICHED_VOTE, PARTIES)
-    assert "A favor: PSOE, Sumar" in block
-    assert "En contra: PP, Vox (div.)" in block
-    assert "GS" not in block  # nada de siglas crípticas
+def test_ficha_publica_veredicto_no_extracto_crudo():
+    block = format_expediente_block(EXPEDIENTE, PARTIES, GRUPOS_LARGOS)
+    assert "blindar por ley" in block
+    assert "p.30" in block
+    assert "Incoherente" in block
 
 
-def test_validated_match_rendered_with_page():
-    block = format_vote_block(ENRICHED_VOTE, PARTIES)
-    assert "📋" in block
-    assert "PSOE" in block
-    assert "p.45" in block
+def test_match_sin_veredicto_no_se_publica():
+    exp = {**EXPEDIENTE, "matches": [
+        {"party": "PSOE", "promesa": "algo", "veredicto": None, "page_start": 10}]}
+    block = format_expediente_block(exp, PARTIES, GRUPOS_LARGOS)
+    assert "PSOE" not in block.split("Absten")[-1]
 
 
-def test_unenriched_vote_falls_back_to_titulo():
-    block = format_vote_block(RAW_VOTE, PARTIES)
-    assert "Toma en consideración" in block
-    assert "APROBADA" not in block  # sin resultado no se inventa nada
+def test_ficha_agrupa_los_votos_por_sentido():
+    block = format_expediente_block(EXPEDIENTE, PARTIES, GRUPOS_LARGOS)
+    assert "A favor: PSOE" in block
+    assert "Abstención: PP" in block
+    assert "En contra: Vox" in block
+
+
+def test_ficha_sin_enmiendas_no_menciona_enmiendas():
+    exp = {**EXPEDIENTE, "parciales": []}
+    block = format_expediente_block(exp, PARTIES, GRUPOS_LARGOS)
+    assert "enmiendas" not in block
 
 
 def test_boe_line_uses_resumen_when_available():
