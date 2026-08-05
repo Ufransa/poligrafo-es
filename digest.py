@@ -44,8 +44,9 @@ _VEREDICTO_TEXTO = {
 # El juez emitía veredictos contradictorios porque el prompt no le decía cómo
 # había votado cada partido (dry-run del 2026-08-04: misma promesa de Sumar,
 # mismo sentido de voto, "coherente" en una ficha e "incoherente" en la
-# siguiente). Se guardan en la base pero no se publican hasta validarlos.
-PUBLICAR_VEREDICTOS = False
+# siguiente). Corregido y validado sobre los 16 expedientes de julio: 6
+# veredictos, todos defendibles, y silencio en 11 de 16.
+PUBLICAR_VEREDICTOS = True
 
 
 def format_expediente_block(exp, parties, grupos_largos):

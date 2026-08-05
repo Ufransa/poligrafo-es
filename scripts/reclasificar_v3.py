@@ -53,7 +53,11 @@ def run(dry_run=False):
                      expediente_key(v["texto_expediente"]),
                      s["id"], v["numero_votacion"]),
                 )
-            conn.commit()
+            # En dry-run no se confirma nada aquí: un commit por sesión dejaría
+            # la reclasificación escrita y el rollback final solo revertiría los
+            # flags, así que el "ensayo" no sería tal.
+            if not dry_run:
+                conn.commit()
 
         conn.execute("DELETE FROM vote_program_matches")
         conn.execute("UPDATE votes SET resumen=NULL, que_cambia=NULL, enriched_at=NULL")
