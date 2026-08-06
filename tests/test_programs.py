@@ -110,3 +110,43 @@ def test_extract_chunks_handles_page_with_no_text():
         chunks = extract_chunks(b"fake_pdf", "PP", {"vivienda": ["vivienda"]})
 
     assert chunks == []
+
+
+def _pdf_falso(paginas):
+    """paginas: lista de strings, una por página del PDF."""
+    mock_pdf = MagicMock()
+    mock_pdf.__enter__ = lambda s: mock_pdf
+    mock_pdf.__exit__ = MagicMock(return_value=False)
+    mock_pdf.pages = []
+    for texto in paginas:
+        p = MagicMock()
+        p.extract_text.return_value = texto
+        mock_pdf.pages.append(p)
+    return mock_pdf
+
+
+def test_page_start_es_la_pagina_real_del_pdf():
+    """
+    Antes era el índice del trozo: VOX llegaba a 59 en un PDF de ~40 páginas.
+    Publicar esa cifra como "p.N" mandaba al lector a una página inexistente.
+    """
+    from src.programs import extract_chunks
+    # 3 páginas de 500 palabras: un chunk por página, con su número.
+    paginas = [" ".join(["vivienda alquiler"] * 250) for _ in range(3)]
+
+    with patch("src.programs.pdfplumber.open", return_value=_pdf_falso(paginas)):
+        chunks = extract_chunks(b"x", "PP", CATEGORIES)
+
+    paginas_vistas = sorted({c["page_start"] for c in chunks})
+    assert paginas_vistas == [1, 2, 3]
+
+
+def test_page_start_nunca_supera_el_numero_de_paginas():
+    from src.programs import extract_chunks
+    paginas = [" ".join(["vivienda alquiler"] * 600) for _ in range(2)]  # 2400 palabras
+
+    with patch("src.programs.pdfplumber.open", return_value=_pdf_falso(paginas)):
+        chunks = extract_chunks(b"x", "PP", CATEGORIES)
+
+    assert max(c["page_start"] for c in chunks) <= 2
+    assert min(c["page_start"] for c in chunks) >= 1

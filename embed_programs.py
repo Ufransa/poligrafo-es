@@ -17,13 +17,24 @@ def run():
         pendientes = conn.execute(
             "SELECT id, text FROM program_chunks WHERE embedding IS NULL"
         ).fetchall()
-        print(f"{len(pendientes)} chunks pendientes de vectorizar.")
-        for i in range(0, len(pendientes), LOTE):
-            lote = pendientes[i:i + LOTE]
-            vectores = embed_texts([r["text"] for r in lote], "passage: ")
-            for row, vector in zip(lote, vectores):
-                set_chunk_embedding(conn, row["id"], to_blob(vector))
-            print(f"  {min(i + LOTE, len(pendientes))}/{len(pendientes)}")
+
+        # Una fila por (texto, categoría) hace que el mismo texto aparezca hasta
+        # 12 veces. Vectorizar por texto único y repartir el vector evita
+        # multiplicar por 4 el trabajo, que en la Orange Pi son horas.
+        por_texto = {}
+        for row in pendientes:
+            por_texto.setdefault(row["text"], []).append(row["id"])
+
+        textos = list(por_texto)
+        print(f"{len(pendientes)} filas pendientes ({len(textos)} textos únicos).")
+        for i in range(0, len(textos), LOTE):
+            lote = textos[i:i + LOTE]
+            vectores = embed_texts(lote, "passage: ")
+            for texto, vector in zip(lote, vectores):
+                blob = to_blob(vector)
+                for chunk_id in por_texto[texto]:
+                    set_chunk_embedding(conn, chunk_id, blob)
+            print(f"  {min(i + LOTE, len(textos))}/{len(textos)}")
         print("Done.")
     finally:
         conn.close()
