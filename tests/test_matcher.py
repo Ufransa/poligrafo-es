@@ -80,7 +80,7 @@ def test_no_hay_sesgo_por_numero_de_chunks(monkeypatch):
 
 
 def test_deduplica_extractos_repetidos(monkeypatch):
-    # La ingesta repitió cada extracto ~5 veces; el top-N no puede ser N copias
+    # El mismo texto llega una vez por categoría; el top-N no puede ser N copias
     # de la misma promesa.
     monkeypatch.setattr("src.matcher.embed_texts",
                         lambda textos, prefijo: np.array([[1.0, 0.0]], dtype=np.float32))

@@ -5,7 +5,7 @@ import numpy as np
 
 from src.embeddings import embed_texts, from_blob
 
-# Medido sobre los 541 chunks únicos: e5-small comprime las similitudes en
+# Medido sobre los 540 textos únicos: e5-small comprime las similitudes en
 # 0.80-0.89, así que el 0.80 previsto dejaba pasar el 100%. A 0.85 quedaban
 # 15-60 candidatos por ley y el juez seguía convirtiendo promesas genéricas en
 # veredictos; a 0.87 quedan 5-9, todos con solape real de materia.
@@ -37,7 +37,8 @@ def top_candidates_per_party(vote_text, chunks, per_party=3, min_similarity=MIN_
     A diferencia del prefiltro por keywords que sustituye, no premia a los
     partidos con programas largos: el umbral es absoluto, no relativo.
     """
-    # La ingesta dejó cada extracto repetido ~5 veces (541 textos únicos de 2645).
+    # program_chunks guarda una fila por (texto, categoría), así que un extracto
+    # que toca 10 categorías llega aquí 10 veces: 540 textos reales en 2646 filas.
     # Sin deduplicar, el top-N de un partido son N copias de la misma promesa.
     vistos = set()
     unicos = []
