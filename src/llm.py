@@ -63,8 +63,15 @@ match si el extracto menciona ese país, ese tipo de acuerdo bilateral o esa \
 política exterior concreta. En caso de duda, null.
   · Una promesa sobre PROCEDIMIENTO parlamentario (uso de la urgencia, del decreto-ley, \
 del reglamento) NO es un pronunciamiento sobre la MATERIA que se vota: null.
-  · Promesas genéricas de cooperación, diálogo, eficiencia o modernización no son \
-pronunciamientos concretos sobre nada: null.
+  · PRUEBA DEL PARAGUAS, aplícala a cada match antes de darlo por bueno: ¿serviría esa \
+misma promesa como match de una ley sobre un tema COMPLETAMENTE distinto? Si la \
+respuesta es sí, es una promesa paraguas y el veredicto es null. Ejemplos de promesa \
+paraguas que debes rechazar: "mejorar la cooperación entre el Estado y las comunidades \
+autónomas", "respetar el marco competencial", "modernizar la administración", "defender \
+los derechos de la ciudadanía", "impulsar el diálogo". Valen igual para una ley de \
+carreteras que para una de sanidad, así que no demuestran nada.
+  · La promesa debe nombrar la MATERIA concreta que se vota (la autopista, la \
+discapacidad, el cribado neonatal), no la categoría amplia en la que encaja.
 - Neutralidad absoluta: describe, no opines ni califiques."""
 
 _SYSTEM_BOE = """Eres el redactor de PolígrafoES. Resumes entradas del BOE para un \
