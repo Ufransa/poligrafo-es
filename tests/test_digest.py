@@ -49,8 +49,20 @@ def test_ficha_publica_veredicto_no_extracto_crudo(monkeypatch):
     monkeypatch.setattr(digest_mod, "PUBLICAR_VEREDICTOS", True)
     block = format_expediente_block(EXPEDIENTE, PARTIES, GRUPOS_LARGOS)
     assert "blindar por ley" in block
-    assert "p.30" in block
     assert "Incoherente" in block
+
+
+def test_la_ficha_no_cita_numero_de_pagina(monkeypatch):
+    """
+    page_start es el índice del trozo de texto, NO la página del PDF (VOX llega
+    a 59 en un programa de ~40 páginas). Publicar "p.30" mandaba al lector a una
+    página que no existe.
+    """
+    import digest as digest_mod
+    monkeypatch.setattr(digest_mod, "PUBLICAR_VEREDICTOS", True)
+    block = format_expediente_block(EXPEDIENTE, PARTIES, GRUPOS_LARGOS)
+    assert "p.30" not in block
+    assert "p." not in block
 
 
 def test_match_sin_veredicto_no_se_publica(monkeypatch):

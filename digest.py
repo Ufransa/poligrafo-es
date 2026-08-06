@@ -99,8 +99,11 @@ def format_expediente_block(exp, parties, grupos_largos):
     if veredictos:
         lines.append("")
         for m in veredictos:
+            # Sin referencia de página: page_start es el índice del trozo de
+            # texto, no la página del PDF, así que citarlo mandaba al lector a
+            # buscar en una página que no existe.
             lines.append(
-                f"📋 <b>{html.escape(m['party'])}</b> prometió (p.{m['page_start']}): "
+                f"📋 <b>{html.escape(m['party'])}</b> prometió: "
                 f"<i>{html.escape(m['promesa'])}</i> → "
                 f"{_VEREDICTO_TEXTO[m['veredicto']]}"
             )
