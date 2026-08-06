@@ -5,11 +5,18 @@ import numpy as np
 
 from src.embeddings import embed_texts, from_blob
 
-# Medido sobre los 540 textos únicos: e5-small comprime las similitudes en
-# 0.80-0.89, así que el 0.80 previsto dejaba pasar el 100%. A 0.85 quedaban
-# 15-60 candidatos por ley y el juez seguía convirtiendo promesas genéricas en
-# veredictos; a 0.87 quedan 5-9, todos con solape real de materia.
-MIN_SIMILARITY = 0.87
+# e5-small comprime las similitudes en 0.80-0.89, así que el 0.80 previsto en el
+# plan dejaba pasar el 100% de los textos.
+#
+# 0.87 daba la mejor precisión, pero medido sobre los 8 programas resultó excluir
+# estructuralmente a los partidos con programa corto: la similitud máxima crece
+# con el número de trozos, así que PSOE (212 textos) entraba siempre y PNV (46) o
+# EH Bildu (8) nunca, con independencia de lo que dijeran. Eso sesga la
+# herramienta hacia los partidos grandes, que es lo contrario de lo que se busca.
+#
+# A 0.85 entran también los pequeños y el ruido lo corta el juez, que desde que
+# recibe el sentido de voto es conservador (6 veredictos de ~20 candidatos).
+MIN_SIMILARITY = 0.85
 
 
 def load_categories(config_path="config/categories.json"):
