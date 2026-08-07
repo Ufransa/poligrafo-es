@@ -148,3 +148,59 @@ def test_prompt_avisa_de_que_una_enmienda_a_la_totalidad_invierte_el_voto():
 def test_prompt_sin_votos_no_revienta():
     prompt = build_expediente_prompt(EXPEDIENTE, {})
     assert "aprobada" in prompt
+
+
+class FakeMessagesSecuencia:
+    """Devuelve una respuesta distinta por llamada, para simular la variabilidad
+    real del modelo entre pasadas idénticas."""
+
+    def __init__(self, respuestas):
+        self._respuestas = list(respuestas)
+        self.llamadas = 0
+
+    def parse(self, **kwargs):
+        self.llamadas += 1
+        return FakeResponse(self._respuestas.pop(0))
+
+
+class FakeClientSecuencia:
+    def __init__(self, respuestas):
+        self.messages = FakeMessagesSecuencia(respuestas)
+
+
+def _enriquecimiento(*matches):
+    return VoteEnrichment(resumen="x", que_cambia="y", matches=list(matches))
+
+
+def test_descarta_el_veredicto_que_cambia_entre_pasadas():
+    """
+    Medido en producción: en una ley con solape débil, dos ejecuciones idénticas
+    daban 'cumple' e 'incumple' para la misma promesa. Un veredicto que no se
+    reproduce no es un veredicto, es ruido.
+    """
+    client = FakeClientSecuencia([
+        _enriquecimiento(PartyMatch(party="ERC", chunk_id=10, promesa="p", veredicto="cumple")),
+        _enriquecimiento(PartyMatch(party="ERC", chunk_id=10, promesa="p", veredicto="incumple")),
+    ])
+    result = enrich_expediente(EXPEDIENTE, CANDIDATES, client=client)
+    assert result.matches == []
+    assert client.messages.llamadas == 2
+
+
+def test_conserva_el_veredicto_que_se_repite():
+    client = FakeClientSecuencia([
+        _enriquecimiento(PartyMatch(party="PSOE", chunk_id=10, promesa="p", veredicto="cumple")),
+        _enriquecimiento(PartyMatch(party="PSOE", chunk_id=10, promesa="otra redaccion", veredicto="cumple")),
+    ])
+    result = enrich_expediente(EXPEDIENTE, CANDIDATES, client=client)
+    assert [(m.party, m.veredicto) for m in result.matches] == [("PSOE", "cumple")]
+
+
+def test_descarta_el_match_que_solo_aparece_en_una_pasada():
+    client = FakeClientSecuencia([
+        _enriquecimiento(PartyMatch(party="PSOE", chunk_id=10, promesa="p", veredicto="cumple"),
+                         PartyMatch(party="VOX", chunk_id=20, promesa="p", veredicto="incumple")),
+        _enriquecimiento(PartyMatch(party="PSOE", chunk_id=10, promesa="p", veredicto="cumple")),
+    ])
+    result = enrich_expediente(EXPEDIENTE, CANDIDATES, client=client)
+    assert [m.chunk_id for m in result.matches] == [10]

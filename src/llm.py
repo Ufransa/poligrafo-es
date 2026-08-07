@@ -128,28 +128,50 @@ def build_expediente_prompt(expediente, candidates):
     return "\n".join(partes)
 
 
-def enrich_expediente(expediente, candidates, client=None):
+PASADAS_VEREDICTO = 2
+
+
+def enrich_expediente(expediente, candidates, client=None, pasadas=PASADAS_VEREDICTO):
     """
     Una llamada por expediente en vez de una por votación.
     Returns: VoteEnrichment con matches filtrados a chunk_ids realmente candidatos.
+
+    El juez se ejecuta `pasadas` veces y solo sobreviven los veredictos que
+    coinciden en todas. Medido en producción: cuando el solape entre la promesa
+    y la materia votada es débil, dos ejecuciones idénticas dan "cumple" e
+    "incumple" para la misma promesa; cuando el solape es real, coinciden. La
+    reproducibilidad separa el veredicto sólido del ruido mejor que cualquier
+    umbral de similitud, que es una proxy del solape y no del criterio.
+    El resumen y el "qué cambia" se toman de la primera pasada.
     """
     client = client or _client()
     valid_ids = {c["chunk_id"] for cands in candidates.values() for c in cands}
 
-    response = client.messages.parse(
-        model=MODEL,
-        max_tokens=2048,
-        system=_SYSTEM_VOTE,
-        messages=[{"role": "user",
-                   "content": build_expediente_prompt(expediente, candidates)}],
-        output_format=VoteEnrichment,
-    )
-    enrichment = response.parsed_output
-    enrichment.matches = [
-        m for m in enrichment.matches
-        if m.chunk_id in valid_ids and m.veredicto is not None
-    ]
-    return enrichment
+    resultados = []
+    for _ in range(pasadas):
+        response = client.messages.parse(
+            model=MODEL,
+            max_tokens=2048,
+            system=_SYSTEM_VOTE,
+            messages=[{"role": "user",
+                       "content": build_expediente_prompt(expediente, candidates)}],
+            output_format=VoteEnrichment,
+        )
+        enrichment = response.parsed_output
+        enrichment.matches = [
+            m for m in enrichment.matches
+            if m.chunk_id in valid_ids and m.veredicto is not None
+        ]
+        resultados.append(enrichment)
+
+    primero = resultados[0]
+    # Un veredicto vale si (chunk_id, veredicto) sale igual en todas las pasadas.
+    # La redacción de la promesa varía entre llamadas y no se compara.
+    comunes = set.intersection(*[
+        {(m.chunk_id, m.veredicto) for m in r.matches} for r in resultados
+    ])
+    primero.matches = [m for m in primero.matches if (m.chunk_id, m.veredicto) in comunes]
+    return primero
 
 
 def summarize_boe(entry, client=None):
