@@ -30,7 +30,7 @@ def test_los_casos_revisados_por_fran_nunca_salen_al_reves_y_casi_todos_siguen_s
              "subtipo": "devolucion" if "devoluci" in (caso["expediente"] + caso["subgrupo"]).lower() else "normal"}
         votos = [{"partido": p, "voto": x} for p, x in sorted(caso["votos"].items())]
         texto = juez.prompt(v, votos, [{"id": 1, "partido": caso["partido"], "texto": caso["promesa"]}])
-        por_juez = {m: juez.estables(llm, m, texto, {1}) for m in juez.JUECES}
+        por_juez = {m: juez.estables(llm, m, texto, {1: caso["partido"]}) for m in juez.JUECES}
         res = juez.nivel({m: (r or {}).get((caso["partido"], 1)) for m, r in por_juez.items()}, False)
         if res and res[1] != caso["veredicto_esperado"]:
             al_reves.append((n, caso["partido"], caso["expediente"][:80], res))
