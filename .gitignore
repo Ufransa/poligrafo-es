@@ -5,3 +5,8 @@ __pycache__/
 .pytest_cache/
 spike_results*.json
 psoe_programa.pdf
+.superpowers/
+
+electoral.db
+datos.json
+electoral_data/
