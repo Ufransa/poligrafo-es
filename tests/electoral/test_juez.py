@@ -20,7 +20,9 @@ def test_tres_jueces_de_acuerdo_con_relacion_directa_dan_veredicto(cli, zips):
     _preparar(cli, zips)
     cli("juzgar", "--k", "3", env=_env())
     cruces = cli("exportar")["cruces"]
-    assert cruces and all(c["nivel"] == "veredicto" for c in cruces if c["partido"] == "PSOE" and not c["dividido"])
+    # Solo «cumple»: un «incumple» necesita además revisión a mano (test_revision_manual).
+    cumple = [c for c in cruces if c["partido"] == "PSOE" and not c["dividido"] and c["veredicto"] == "cumple"]
+    assert cumple and all(c["nivel"] == "veredicto" for c in cumple)
     assert all(len(c["jueces"]) == 3 for c in cruces)
 
 
