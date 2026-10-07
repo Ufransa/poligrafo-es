@@ -49,7 +49,7 @@ def cmd_juzgar(a, conn):
 
 
 def cmd_fuentes(a, conn):
-    iniciativas = fuentes.cargar_iniciativas(a.iniciativas)
+    iniciativas = fuentes.indice_iniciativas(fuentes.cargar_iniciativas(a.iniciativas))
     vs = conn.execute("SELECT * FROM votaciones WHERE excluida_tramite = 0").fetchall()
     if a.boe:
         boe = json.loads(Path(a.boe).read_text(encoding="utf-8"))

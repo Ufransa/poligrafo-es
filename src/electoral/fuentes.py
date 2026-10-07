@@ -27,15 +27,26 @@ def cargar_iniciativas(origen: str | None) -> list[dict]:
     return todas
 
 
-def url_bocg(expediente: str, iniciativas: list[dict]) -> str | None:
+def indice_iniciativas(iniciativas: list[dict]) -> dict:
+    """{clave_iniciativa: url BOCG}. Se calcula una vez para toda la legislatura."""
+    indice = {}
+    for x in iniciativas:
+        enlaces = (x.get("ENLACESBOCG") or "").split()
+        if enlaces:
+            indice.setdefault(clave_iniciativa(x.get("OBJETO", "")), enlaces[0].split("#")[0])
+    return indice
+
+
+def url_bocg(expediente: str, indice: dict) -> str | None:
+    """Enlace al texto de la iniciativa. Exacto primero; aproximado solo para títulos largos y nunca para
+    decretos-ley (el número tiene que coincidir). Ante la duda, None: un enlace equivocado es peor que ninguno."""
     clave = clave_iniciativa(expediente)
-    objetos = [clave_iniciativa(x.get("OBJETO", "")) for x in iniciativas]
-    m = difflib.get_close_matches(clave[:250], [o[:250] for o in objetos], n=1, cutoff=0.75)
-    if not m:
+    if clave in indice:
+        return indice[clave]
+    if clave.startswith("real decreto-ley") or len(clave) < 40:
         return None
-    x = iniciativas[[o[:250] for o in objetos].index(m[0])]
-    enlaces = (x.get("ENLACESBOCG") or "").split()
-    return enlaces[0].split("#")[0] if enlaces else None
+    m = difflib.get_close_matches(clave, [c for c in indice if not c.startswith("real decreto-ley")], n=1, cutoff=0.92)
+    return indice[m[0]] if m else None
 
 
 def es_final_aprobada(v) -> bool:
