@@ -50,13 +50,20 @@ def _temas(promesas: list[dict]) -> dict:
 
 
 def _cruces(conn) -> list[dict]:
+    """El nivel se recalcula aquí con el voto y el «dividido» actuales: corregir los datos de votos no deja
+    veredictos obsoletos."""
+    from src.electoral import juez
     salida = []
     for c in conn.execute("""SELECT c.*, vp.voto, vp.dividido FROM cruces c
                              JOIN votos_partido vp ON vp.votacion_id = c.votacion_id AND vp.partido = c.partido
                              ORDER BY c.votacion_id, c.partido"""):
+        jueces = json.loads(c["jueces"])
+        res = juez.nivel({m: ((r["veredicto"], r["fuerza"]) if r else None) for m, r in jueces.items()}, bool(c["dividido"]))
+        if not res:
+            continue
         salida.append({"votacion_id": c["votacion_id"], "promesa_id": c["promesa_id"], "partido": c["partido"],
-                       "voto": c["voto"], "dividido": bool(c["dividido"]), "nivel": c["nivel"],
-                       "veredicto": c["veredicto"], "jueces": json.loads(c["jueces"])})
+                       "voto": c["voto"], "dividido": bool(c["dividido"]), "nivel": res[0],
+                       "veredicto": res[1], "jueces": jueces})
     return salida
 
 

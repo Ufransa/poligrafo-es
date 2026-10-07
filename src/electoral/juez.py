@@ -1,5 +1,6 @@
 # src/electoral/juez.py
 """Cruce promesa ↔ votación con tres jueces de familias distintas (validado: 19/19 con unanimidad)."""
+import hashlib
 import json
 from concurrent.futures import ThreadPoolExecutor
 
@@ -64,8 +65,9 @@ def asegurar_embeddings(conn) -> None:
 
 def candidatos(conn, votaciones, k):
     """Top-k promesas por votación, con la similitud normalizada dentro de cada programa (z-score)."""
+    # Solo promesas de 2023: un programa de 2026 no se puede «incumplir» con votos de la legislatura anterior.
     P = conn.execute("SELECT id, partido, texto, embedding FROM promesas "
-                     "WHERE procedimental = 0 AND embedding IS NOT NULL ORDER BY id").fetchall()
+                     "WHERE procedimental = 0 AND embedding IS NOT NULL AND anio = 2023 ORDER BY id").fetchall()
     if not P or not votaciones:
         return {}
     E = np.vstack([from_blob(p["embedding"]) for p in P])   # misma consulta: ids y vectores casan
@@ -98,15 +100,26 @@ def prompt(v, votos, cands) -> str:
     return "\n".join(partes)
 
 
-def estables(llm, modelo, texto, validos):
-    """Solo lo que el juez repite igual en dos pasadas. None si alguna pasada falla."""
+def estables(llm, modelo, texto, validos: dict):
+    """Solo lo que el juez repite igual en dos pasadas. None si alguna pasada falla.
+
+    `validos` es {promesa_id: partido dueño}. El partido del cruce es siempre el dueño de la promesa: si el
+    juez se lo atribuye a otro, ese match se descarta.
+    """
     pasadas = []
     for _ in range(2):
         out = llm.json(modelo, SISTEMA, texto)
         if out is None:
             return None
-        pasadas.append({(m.get("party"), m.get("chunk_id")): (m.get("veredicto"), m.get("fuerza"))
-                        for m in out.get("matches", []) if m.get("chunk_id") in validos and m.get("veredicto") in ("cumple", "incumple")})
+        pasada = {}
+        for m in out.get("matches", []):
+            try:
+                pid = int(m.get("chunk_id"))
+            except (TypeError, ValueError):
+                continue
+            if validos.get(pid) and m.get("party") == validos[pid] and m.get("veredicto") in ("cumple", "incumple"):
+                pasada[(validos[pid], pid)] = (m.get("veredicto"), m.get("fuerza"))
+        pasadas.append(pasada)
     return {k: x for k, x in pasadas[0].items() if pasadas[1].get(k) == x}
 
 
@@ -122,38 +135,55 @@ def nivel(respuestas: dict, dividido: bool):
     return None
 
 
-def juzgar(conn, llm, k=20) -> None:
-    asegurar_embeddings(conn)
-    hechos = {r[0] for r in conn.execute("SELECT votacion_id FROM juicios WHERE completo = 1")}
-    vs = [v for v in conn.execute("SELECT * FROM votaciones WHERE excluida_tramite = 0").fetchall() if v["id"] not in hechos]
-    cands = candidatos(conn, vs, k)
+def huella(cands, votos) -> str:
+    """Lo que vio el juez: si cambian los candidatos o los votos, el expediente se vuelve a juzgar."""
+    base = json.dumps([sorted(p["id"] for p in cands), [(r["partido"], r["voto"]) for r in votos]])
+    return hashlib.sha1(base.encode("utf-8")).hexdigest()
 
+
+def juzgar(conn, llm, k=20) -> int:
+    """Juzga lo pendiente. Devuelve cuántos expedientes ha cerrado. No juzga si quedan bloques sin extraer."""
+    pendientes = conn.execute("SELECT COUNT(*) FROM bloques WHERE extraido = 0").fetchone()[0]
+    if pendientes:
+        print(f"Quedan {pendientes} bloques de programa sin extraer: no se juzga hasta completarlos (extraer).")
+        return 0
+    asegurar_embeddings(conn)
+    hechas = {r[0]: r[1] for r in conn.execute("SELECT votacion_id, respuestas FROM juicios WHERE completo = 1")}
+    todas = conn.execute("SELECT * FROM votaciones WHERE excluida_tramite = 0").fetchall()
+    cands = candidatos(conn, todas, k)
     # La conexión SQLite no se comparte entre hilos: todo lo que se lee de la base se lee aquí, antes.
     votos_de = {v["id"]: conn.execute("SELECT * FROM votos_partido WHERE votacion_id = ? ORDER BY partido",
-                                      (v["id"],)).fetchall() for v in vs}
+                                      (v["id"],)).fetchall() for v in todas}
+    huellas = {v["id"]: huella(cands.get(v["id"], []), votos_de[v["id"]]) for v in todas}
+    vs = [v for v in todas if hechas.get(v["id"]) != huellas[v["id"]]]
 
     def uno(v):
-        votos = votos_de[v["id"]]
-        texto = prompt(v, votos, cands.get(v["id"], []))
-        validos = {p["id"] for p in cands.get(v["id"], [])}
-        return v, votos, {m: estables(llm, m, texto, validos) for m in JUECES}
+        c = cands.get(v["id"], [])
+        if not c:
+            return v, {m: {} for m in JUECES}          # sin candidatos no hay nada que preguntar
+        texto = prompt(v, votos_de[v["id"]], c)
+        validos = {p["id"]: p["partido"] for p in c}
+        return v, {m: estables(llm, m, texto, validos) for m in JUECES}
 
+    cerrados = 0
     with ThreadPoolExecutor(6) as ex:
         for f in [ex.submit(uno, v) for v in vs]:
             try:
-                v, votos, por_juez = f.result()
-            except PresupuestoAgotado:
+                v, por_juez = f.result()
+            except Exception:                  # presupuesto agotado o fallo inesperado: el expediente queda pendiente
                 continue
             if any(r is None for r in por_juez.values()):
                 continue                       # algún juez falló: el expediente queda pendiente
-            dividido = {r["partido"]: bool(r["dividido"]) for r in votos}
+            dividido = {r["partido"]: bool(r["dividido"]) for r in votos_de[v["id"]]}
             conn.execute("DELETE FROM cruces WHERE votacion_id = ?", (v["id"],))
             for clave in set().union(*[set(r) for r in por_juez.values()]):
                 partido, promesa_id = clave
                 respuestas = {m: por_juez[m].get(clave) for m in JUECES}
-                res = nivel(respuestas, dividido.get(partido, False))
+                res = nivel(respuestas, dividido.get(partido, True))
                 if res:
                     conn.execute("INSERT INTO cruces VALUES (?,?,?,?,?,?)", (v["id"], promesa_id, partido, res[0], res[1], json.dumps(
                         {m: ({"veredicto": r[0], "fuerza": r[1]} if r else None) for m, r in respuestas.items()}, ensure_ascii=False)))
-            conn.execute("INSERT OR REPLACE INTO juicios VALUES (?, 1, ?)", (v["id"], ""))
+            conn.execute("INSERT OR REPLACE INTO juicios VALUES (?, 1, ?)", (v["id"], huellas[v["id"]]))
             conn.commit()
+            cerrados += 1
+    return cerrados

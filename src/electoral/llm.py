@@ -26,12 +26,17 @@ def _transporte_openrouter(clave):
     sesion = requests.Session()
 
     def enviar(body):
+        error = None
         for intento in range(3):
-            r = sesion.post(URL, json=body, headers={"Authorization": f"Bearer {clave}"}, timeout=120)
-            if r.status_code == 200:
-                return r.json()
+            try:
+                r = sesion.post(URL, json=body, headers={"Authorization": f"Bearer {clave}"}, timeout=120)
+                if r.status_code == 200:
+                    return r.json()
+                error = r.status_code
+            except requests.RequestException as e:
+                error = str(e)
             time.sleep(3 * (intento + 1))
-        return {"error": r.status_code}
+        return {"error": error}
     return enviar
 
 
@@ -65,7 +70,10 @@ class LLM:
                 "messages": [{"role": "system", "content": sistema}, {"role": "user", "content": usuario}]}
         if modelo in RAZONAMIENTO:
             body["reasoning"] = RAZONAMIENTO[modelo]
-        d = self._enviar(body)
+        try:
+            d = self._enviar(body)
+        except Exception:                      # cualquier transporte: un fallo de red es una respuesta fallida
+            return None
         with self._lock:
             self.gastado += float((d.get("usage") or {}).get("cost") or 0)
         try:

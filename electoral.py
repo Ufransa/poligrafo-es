@@ -40,10 +40,12 @@ def cmd_extraer(a, conn):
 
 def cmd_juzgar(a, conn):
     llm = LLM(a.tope)
-    juez.juzgar(conn, llm, k=a.k)
-    conn.execute("INSERT INTO gasto (fecha, paso, usd) VALUES (datetime('now'), 'juzgar', ?)", (llm.gastado,))
-    conn.commit()
-    print(f"gastado {llm.gastado:.4f} $")
+    try:
+        print(juez.juzgar(conn, llm, k=a.k), "expedientes juzgados")
+    finally:
+        conn.execute("INSERT INTO gasto (fecha, paso, usd) VALUES (datetime('now'), 'juzgar', ?)", (llm.gastado,))
+        conn.commit()
+        print(f"gastado {llm.gastado:.4f} $")
 
 
 def cmd_fuentes(a, conn):
