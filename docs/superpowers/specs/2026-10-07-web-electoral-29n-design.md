@@ -165,7 +165,14 @@ El contrato (§6) incorpora estas URL: `votaciones.url_sesion`, `votaciones.url_
 **No lleva:** ranking ni comparador de «mejores», comentarios ni nada social. Los colores de partido no son
 protagonistas; se decide con las propuestas visuales.
 
-**Diseño visual:** 2 o 3 propuestas con **Claude Design** sobre datos de ejemplo, antes de construir. Fran elige.
+**Diseño visual: propuesta A «Boletín»**, elegida por Fran el 2026-10-07 entre tres propuestas hechas con Claude Design
+(https://claude.ai/artifact/3vYK8YmHdYn6bQT9JNjvpb, tableros `Main` y `A_Ficha`):
+- Tipografías: **Newsreader** (titulares y citas, en cursiva) + **Source Sans 3** (texto).
+- Colores: fondo `#F5F5F1`, tinta `#1A1A1A`, gris secundario `#4A4A4A`, líneas `#D6D4CC`, enlaces `#1F3A8A`.
+- Veredicto: **cumple** `#1E3A8A` (azul) / **incumple** `#9A4A06` (ámbar oscuro). Se distinguen por luminosidad;
+  se evitan el rojo y el verde porque leen como bueno o malo.
+- Sin colores de partido. Pie oscuro con «Sobre este proyecto» y la firma.
+- Móvil primero (390 px), objetivos táctiles de 44 px o más, texto de 15 a 18 px.
 
 **Tecnología: Astro** (decidido el 2026-10-07). Genera HTML estático a partir de `datos.json` en el momento del
 build, con muy poco JavaScript: carga rápido en móviles viejos y no hay nada que se pueda romper en el navegador.
