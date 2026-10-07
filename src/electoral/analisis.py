@@ -38,6 +38,7 @@ def gobierno(conn, partidos: list[dict]) -> dict:
     salida = defaultdict(list)
     for c in conn.execute("""SELECT c.*, v.url_boe FROM cruces c JOIN votaciones v ON v.id = c.votacion_id
                              WHERE c.nivel = 'veredicto' AND c.veredicto = 'cumple' AND v.resultado = 'aprobada'
+                             AND v.subtipo = 'normal'
                              AND (v.es_convalidacion = 1 OR v.tipo LIKE 'Dictámenes de Comisiones sobre iniciativas%'
                                   OR v.tipo LIKE 'Enmiendas del Senado%')"""):
         if c["partido"] in de_gobierno:

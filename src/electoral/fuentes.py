@@ -40,6 +40,8 @@ def url_bocg(expediente: str, iniciativas: list[dict]) -> str | None:
 
 def es_final_aprobada(v) -> bool:
     """Solo lo que acaba en el BOE: convalidaciones de decretos-ley y leyes aprobadas en su votación final."""
+    if v["subtipo"] != "normal":
+        return False
     final = v["es_convalidacion"] or v["tipo"].startswith(("Dictámenes de Comisiones sobre iniciativas", "Enmiendas del Senado"))
     return bool(final) and v["resultado"] == "aprobada"
 

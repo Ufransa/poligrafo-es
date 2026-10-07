@@ -119,6 +119,10 @@ def clasificar(v: dict) -> tuple[str, bool]:
         return "texto_alternativo", False
     if "devoluci" in bajo:
         return "devolucion", False
+    # Con subgrupo y sin ser totalidad es una votación parcial: una enmienda, un bloque de enmiendas o un
+    # punto suelto. Su voto es táctica parlamentaria, no la postura sobre la iniciativa.
+    if v["titulo_subgrupo"] and "totalidad" not in v["titulo_subgrupo"].lower():
+        return "parcial", False
     es_conv = v["tipo"].lower().startswith("convalidación") and "real decreto-ley" in v["expediente"].lower()
     return "normal", es_conv
 
@@ -148,7 +152,7 @@ def votos_por_partido(v: dict, mapa: dict) -> dict:
             partido = tramos[-1]["partido"] if tramos else None
         else:
             partido = mapa["grupos"].get(d["grupo"])
-        if partido is None:
+        if partido is None or d["voto"] == "No vota":   # una ausencia no es un voto
             continue
         por_partido.setdefault(partido, Counter())[d["voto"]] += 1
     salida = {}
@@ -180,7 +184,7 @@ def guardar(conn, v: dict, mapa: dict) -> None:
         (v["id"], v["fecha"], v["sesion"], v["numero"], v["tipo"], subtipo, int(es_conv),
          v["expediente"], v["texto_subgrupo"], clave_iniciativa(v["expediente"]),
          compute_resultado(v["a_favor"], v["en_contra"]), v["a_favor"], v["en_contra"], v["abstenciones"],
-         int(subtipo == "tramite"), url_xml(v["url_zip_nombre"], v["sesion"], v["fecha"]), url_sesion(v["fecha"])),
+         int(subtipo in ("tramite", "parcial")), url_xml(v["url_zip_nombre"], v["sesion"], v["fecha"]), url_sesion(v["fecha"])),
     )
     conn.execute("DELETE FROM votos_partido WHERE votacion_id = ?", (v["id"],))
     for partido, x in votos_por_partido(v, mapa).items():

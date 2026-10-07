@@ -70,7 +70,8 @@
               "normal",
               "devolucion",
               "texto_alternativo",
-              "tramite"
+              "tramite",
+              "parcial"
             ]
           },
           "resultado": {
