@@ -728,9 +728,9 @@ def transporte(body):
     usuario = body["messages"][1]["content"]
     if "FRAGMENTO:" in usuario:                       # extracción de promesas
         promesas = []
-        for linea in usuario.split("\n"):
-            if linea.startswith("PROMESA:"):
-                texto = linea[len("PROMESA:"):].strip()
+        for trozo in usuario.split("PROMESA:")[1:]:      # el bloque llega en una sola línea
+            texto = trozo.split(" Hemos")[0].strip()
+            if texto:
                 promesas.append({"promesa": texto, "cita": texto, "tema": "Vivienda" if "alquiler" in texto else "Instituciones y calidad democrática",
                                  "procedimental": "real decreto" in texto.lower()})
         return _resp({"promesas": promesas})
@@ -827,7 +827,8 @@ def test_un_partido_sin_programa_aparece_con_su_motivo_y_sin_promesas(cli):
 
 def test_si_se_agota_el_presupuesto_la_extraccion_se_reanuda_sin_duplicar(cli):
     cli("ingest-programa", "2023", "PSOE", str(FIX / "programa_prueba.pdf"), env=_env())
-    cli("extraer", "--tope", "0.0005", env=_env(LLM_FALSO_COSTE="0.001"))   # se para tras la 1.ª llamada
+    cli("extraer", "--tope", "0", env=_env())          # tope 0: se para antes de la primera llamada
+    assert cli("exportar")["promesas"] == []
     cli("extraer", env=_env())
     textos = [p["texto"] for p in cli("exportar")["promesas"]]
     assert len(textos) == len(set(textos)) == 2
@@ -1188,11 +1189,11 @@ def asegurar_embeddings(conn) -> None:
 
 def candidatos(conn, votaciones, k):
     """Top-k promesas por votación, con la similitud normalizada dentro de cada programa (z-score)."""
-    P = conn.execute("SELECT id, partido, texto FROM promesas WHERE procedimental = 0 AND embedding IS NOT NULL").fetchall()
+    P = conn.execute("SELECT id, partido, texto, embedding FROM promesas "
+                     "WHERE procedimental = 0 AND embedding IS NOT NULL ORDER BY id").fetchall()
     if not P or not votaciones:
         return {}
-    E = np.vstack([from_blob(r[0]) for r in conn.execute(
-        "SELECT embedding FROM promesas WHERE procedimental = 0 AND embedding IS NOT NULL")])
+    E = np.vstack([from_blob(p["embedding"]) for p in P])   # misma consulta: ids y vectores casan
     partidos = np.array([p["partido"] for p in P])
     Q = embed_texts([v["expediente"] + " " + v["tipo"] for v in votaciones], "query: ")
     S = Q @ E.T
@@ -1450,7 +1451,7 @@ def url_boe(v: dict, boe: dict) -> str | None:
     return f"https://www.boe.es/buscar/act.php?id={ident}" if ident else None
 ```
 
-`boe` es un diccionario `clave_iniciativa → identificador BOE` que se rellena con el método del paso 1 (en producción, para cada votación final aprobada; en las pruebas, desde `boe_muestra.json`).
+`boe` es un diccionario `clave_iniciativa → identificador BOE`. En las pruebas sale de `boe_muestra.json`. En producción (`fuentes` sin `--boe`), implementa en `fuentes.py` una función `resolver_boe(clave: str) -> str | None` con el método que funcionó en el paso 1. Llámala solo para las votaciones finales aprobadas (las que pasan el filtro de `url_boe`) y guarda el resultado en una tabla `boe (clave TEXT PRIMARY KEY, identificador TEXT)` para no repetir consultas. Si no encuentra el identificador, la URL queda `null`: no se inventa ningún enlace.
 
 En `db.py`, añade tras el esquema (las bases existentes no tienen las columnas):
 
