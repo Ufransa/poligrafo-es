@@ -70,3 +70,106 @@ def test_un_partido_que_no_vota_no_aparece_como_si_hubiera_votado(cli, zips):
     cli("descargar", "--zips", zips)
     for v in cli("exportar")["votaciones"]:
         assert all(x["voto"] != "No vota" for x in v["votos"].values()), v["id"]
+
+
+# --- Hallazgo 4: mayorías cualificadas y asentimiento ---
+
+def _zip_sintetico(destino, votaciones):
+    """ZIP con XML reales de plantilla y las cabeceras cambiadas: dos casos límite que el Congreso no da juntos."""
+    import re
+    import zipfile
+    plantilla = zipfile.ZipFile(next((FIX / "zips").glob("VOT_20250325*.zip")))
+    xml = plantilla.read(plantilla.namelist()[0]).decode("iso-8859-1")
+    destino.mkdir()
+    with zipfile.ZipFile(destino / "VOT_20990101000000.zip", "w") as z:
+        for n, (expediente, asent, si, no) in enumerate(votaciones, 1):
+            x = re.sub(r"<NumeroVotacion>\d+</NumeroVotacion>", f"<NumeroVotacion>{n}</NumeroVotacion>", xml)
+            x = re.sub(r"<TextoExpediente>.*?</TextoExpediente>", f"<TextoExpediente>{expediente}</TextoExpediente>", x, flags=re.S)
+            x = re.sub(r"<TituloSubGrupo>.*?</TituloSubGrupo>", "<TituloSubGrupo></TituloSubGrupo>", x, flags=re.S)
+            x = re.sub(r"<TextoSubGrupo>.*?</TextoSubGrupo>", "<TextoSubGrupo></TextoSubGrupo>", x, flags=re.S)
+            x = re.sub(r"<Asentimiento>\w+</Asentimiento>", f"<Asentimiento>{asent}</Asentimiento>", x)
+            x = re.sub(r"<AFavor>\d+</AFavor>", f"<AFavor>{si}</AFavor>", x)
+            x = re.sub(r"<EnContra>\d+</EnContra>", f"<EnContra>{no}</EnContra>", x)
+            z.writestr(f"sesion999votacion{n}.xml", x.encode("iso-8859-1"))
+    return str(destino)
+
+
+def test_una_ley_organica_sin_mayoria_absoluta_sale_rechazada_y_el_asentimiento_aprobado(cli, tmp_path):
+    zips = _zip_sintetico(tmp_path / "z", [
+        ("Votación de conjunto del Proyecto de Ley Orgánica de prueba.", "No", 175, 170),
+        ("Proposición no de Ley aprobada por asentimiento.", "Sí", 0, 0),
+        ("Votación de conjunto de la Reforma del artículo 49 de la Constitución Española.", "No", 200, 100),
+    ])
+    cli("descargar", "--zips", zips)
+    res = {v["numero"]: v["resultado"] for v in cli("exportar")["votaciones"]}
+    assert res == {1: "rechazada", 2: "aprobada", 3: "rechazada"}
+
+
+# --- Hallazgos 5, 6, 7 y 10: el juez ---
+
+def _preparar(cli, zips, **env):
+    cli("descargar", "--zips", zips)
+    cli("ingest-programa", "2023", "PSOE", str(FIX / "programa_prueba.pdf"), env=_env(**env))
+    cli("extraer", env=_env(**env))
+
+
+def test_el_partido_de_un_cruce_es_siempre_el_dueno_de_la_promesa(cli, zips):
+    _preparar(cli, zips)
+    cli("juzgar", "--k", "3", env=_env(LLM_FALSO_PARTIDO="Vox"))   # los jueces dicen «Vox» para una promesa del PSOE
+    datos = cli("exportar")
+    duenos = {p["id"]: p["partido"] for p in datos["promesas"]}
+    assert all(c["partido"] == duenos[c["promesa_id"]] for c in datos["cruces"])
+
+
+def test_una_promesa_de_2026_nunca_se_cruza_con_votos_de_la_legislatura(cli, zips):
+    _preparar(cli, zips)
+    cli("ingest-programa", "2026", "Sumar", str(FIX / "programa_prueba.pdf"), env=_env())
+    cli("extraer", env=_env())
+    cli("juzgar", "--k", "6", env=_env(LLM_FALSO_TODOS="1"))
+    datos = cli("exportar")
+    anios = {p["id"]: p["anio"] for p in datos["promesas"]}
+    assert datos["cruces"] and all(anios[c["promesa_id"]] == 2023 for c in datos["cruces"])
+
+
+def test_si_un_partido_pasa_a_votar_dividido_su_veredicto_se_recalcula_al_exportar(cli, zips):
+    import sqlite3
+    _preparar(cli, zips)
+    cli("juzgar", "--k", "3", env=_env())
+    assert any(c["nivel"] == "veredicto" for c in cli("exportar")["cruces"])
+    conn = sqlite3.connect(cli.db)
+    conn.execute("UPDATE votos_partido SET dividido = 1 WHERE partido = 'PSOE'")   # p. ej., diputados.json corregido
+    conn.commit(); conn.close()
+    assert all(c["nivel"] == "juzga_tu" for c in cli("exportar")["cruces"] if c["partido"] == "PSOE")
+
+
+def test_un_programa_cargado_despues_tambien_se_juzga(cli, zips):
+    _preparar(cli, zips)
+    cli("juzgar", "--k", "6", env=_env())
+    cli("ingest-programa", "2023", "Sumar", str(FIX / "programa_prueba.pdf"), env=_env())
+    cli("extraer", env=_env())
+    salida = cli("juzgar", "--k", "6", env=_env(LLM_FALSO_TODOS="1"))
+    assert not salida.startswith("0 expedientes")      # los candidatos cambiaron: se vuelve a juzgar
+    assert any(c["partido"] == "Sumar" for c in cli("exportar")["cruces"])
+
+
+def test_no_se_juzga_mientras_queden_bloques_sin_extraer(cli, zips):
+    cli("descargar", "--zips", zips)
+    cli("ingest-programa", "2023", "PSOE", str(FIX / "programa_prueba.pdf"), env=_env())
+    cli("extraer", "--tope", "0", env=_env())          # nada extraído
+    salida = cli("juzgar", "--k", "3", env=_env())
+    assert "sin extraer" in salida
+    cli("extraer", env=_env())
+    cli("juzgar", "--k", "3", env=_env())
+    assert cli("exportar")["cruces"]
+
+
+def test_un_fallo_de_red_no_tumba_la_carga_ni_publica_nada_a_medias(cli, zips):
+    import sqlite3
+    _preparar(cli, zips)
+    cli("juzgar", "--k", "3", env=_env(LLM_FALSO_EXCEPCION="1"))   # el CLI termina sin error
+    assert cli("exportar")["cruces"] == []
+    conn = sqlite3.connect(cli.db)
+    assert conn.execute("SELECT COUNT(*) FROM gasto WHERE paso = 'juzgar'").fetchone()[0] == 1
+    conn.close()
+    cli("juzgar", "--k", "3", env=_env())
+    assert cli("exportar")["cruces"]

@@ -98,6 +98,7 @@ def leer_zip(ruta: Path) -> list[dict]:
                 "a_favor": int(tot.findtext("AFavor", 0)),
                 "en_contra": int(tot.findtext("EnContra", 0)),
                 "abstenciones": int(tot.findtext("Abstenciones", 0)),
+                "asentimiento": tot.findtext("Asentimiento", "").strip() == "Sí",
                 "diputados": [
                     {"diputado": v.findtext("Diputado", "").strip(),
                      "grupo": v.findtext("Grupo", "").strip(),
@@ -125,6 +126,23 @@ def clasificar(v: dict) -> tuple[str, bool]:
         return "parcial", False
     es_conv = v["tipo"].lower().startswith("convalidación") and "real decreto-ley" in v["expediente"].lower()
     return "normal", es_conv
+
+
+MAYORIA_ABSOLUTA = 176   # leyes orgánicas: votación de conjunto (art. 81 CE)
+TRES_QUINTOS = 210       # reforma constitucional (art. 167 CE)
+
+
+def resultado(v: dict) -> str:
+    """Aprobada o rechazada según la mayoría que exige cada votación. El XML no trae el resultado."""
+    if v.get("asentimiento"):
+        return "aprobada"
+    exp = v["expediente"].lower()
+    if exp.startswith("votación de conjunto"):
+        if "constitución" in exp and "reforma" in exp:
+            return "aprobada" if v["a_favor"] >= TRES_QUINTOS else "rechazada"
+        if "orgánica" in exp:
+            return "aprobada" if v["a_favor"] >= MAYORIA_ABSOLUTA else "rechazada"
+    return compute_resultado(v["a_favor"], v["en_contra"])
 
 
 def clave_iniciativa(texto: str) -> str:
@@ -183,7 +201,7 @@ def guardar(conn, v: dict, mapa: dict) -> None:
         f"ON CONFLICT(id) DO UPDATE SET {', '.join(f'{c} = excluded.{c}' for c in columnas[1:])}",
         (v["id"], v["fecha"], v["sesion"], v["numero"], v["tipo"], subtipo, int(es_conv),
          v["expediente"], v["texto_subgrupo"], clave_iniciativa(v["expediente"]),
-         compute_resultado(v["a_favor"], v["en_contra"]), v["a_favor"], v["en_contra"], v["abstenciones"],
+         resultado(v), v["a_favor"], v["en_contra"], v["abstenciones"],
          int(subtipo in ("tramite", "parcial")), url_xml(v["url_zip_nombre"], v["sesion"], v["fecha"]), url_sesion(v["fecha"])),
     )
     conn.execute("DELETE FROM votos_partido WHERE votacion_id = ?", (v["id"],))
