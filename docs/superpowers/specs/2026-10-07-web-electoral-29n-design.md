@@ -27,7 +27,7 @@ personal con enlace compartido.
 | Promesas principales | Criterio medible: los temas a los que cada partido dedica más espacio en su programa | Lo decide el partido con su espacio, no nosotros |
 | Corrupción | **Aparcada** | No hay una fuente de verdad fiable: los titulares tienen sesgo de selección y el CENDOJ anonimiza |
 | Finanzas | Solo la campaña del 23J (gasto y subvención) y el cumplimiento de transparencia del Tribunal de Cuentas | Lo único oficial que cae dentro del periodo |
-| Acceso | Web estática pública en Cloudflare Pages, sin login, `noindex`, repositorio privado | Gente poco tecnológica; un enlace por WhatsApp |
+| Acceso | Web estática pública en Cloudflare Pages, sin login, `noindex`, código público y firmada por Fran | Gente poco tecnológica; un enlace por WhatsApp |
 | LLM | Máximo **10 € en total**, **ningún modelo de Anthropic**, todo vía OpenRouter | Restricción de Fran |
 | Ranking entre partidos | **No** | Ordenar de mejor a peor ya es opinar |
 
@@ -63,7 +63,7 @@ Exporta datos.json          a la Pi  Regenera datos.json
 ```
 
 - **`poligrafo-es`** (repo actual) es el **motor**. El bot de Telegram sigue como está hasta después del 29N.
-- **`poligrafo-web`** (repo privado nuevo) solo lee `datos.json` y genera una web estática.
+- **`poligrafo-web`** (repo público nuevo) solo lee `datos.json` y genera una web estática.
 - **`datos.json`** es el contrato entre los dos. Lleva versión.
 
 ## 5. El motor
@@ -167,8 +167,18 @@ protagonistas; se decide con las propuestas visuales.
 
 **Diseño visual:** 2 o 3 propuestas con **Claude Design** sobre datos de ejemplo, antes de construir. Fran elige.
 
-**Tecnología:** web estática generada a partir del JSON. Recomendación: **Angular con prerenderizado estático**,
-porque es lo que Fran domina y mantendrá. Alternativa más ligera: Astro. *(Confirmar en la revisión de este documento.)*
+**Tecnología: Astro** (decidido el 2026-10-07). Genera HTML estático a partir de `datos.json` en el momento del
+build, con muy poco JavaScript: carga rápido en móviles viejos y no hay nada que se pueda romper en el navegador.
+Cloudflare Pages lo soporta de forma nativa. Lo interactivo (plegar «juzga tú») se hace con `<details>` nativo;
+si en el futuro hace falta más (filtros, buscador), Astro admite islas de cualquier framework sin rehacer la web.
+Se descarta Angular con prerenderizado: más JavaScript y más superficie de mantenimiento para tres pantallas.
+
+**Autoría y código abierto** (decidido por Fran el 2026-10-07):
+- La web **se firma con el nombre de Fran**.
+- **El código es público:** el motor (`poligrafo-es`) y la web (`poligrafo-web`). Las instrucciones exactas de los
+  jueces se pueden auditar. Antes de abrir el repositorio, **auditoría del historial de git** en busca de claves,
+  `.env` o tokens; si aparece alguno, se rota y se limpia el historial antes de hacerlo público.
+- La página «Sobre este proyecto» enlaza al código.
 
 ## 8. Operación
 
