@@ -1,5 +1,7 @@
 # src/electoral/exportar.py
 import json
+
+import jsonschema
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -82,5 +84,10 @@ def construir(conn, raiz: Path) -> dict:
     }
 
 
+ESQUEMA = Path(__file__).resolve().parents[2] / "schema" / "datos.schema.json"
+
+
 def escribir(datos: dict, salida: Path) -> None:
+    """Valida contra el contrato antes de escribir: un datos.json inválido nunca llega a la web."""
+    jsonschema.validate(datos, json.loads(ESQUEMA.read_text(encoding="utf-8")))
     salida.write_text(json.dumps(datos, ensure_ascii=False, indent=1), encoding="utf-8")

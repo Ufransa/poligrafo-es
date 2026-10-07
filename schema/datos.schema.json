@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "datos.json de PolígrafoES 29N",
+  "type": "object",
+  "required": [
+    "meta",
+    "partidos",
+    "votaciones",
+    "promesas",
+    "temas",
+    "cruces",
+    "coherencia",
+    "gobierno",
+    "finanzas"
+  ],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": [
+        "version_contrato",
+        "generado",
+        "periodo",
+        "recuentos"
+      ]
+    },
+    "partidos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "nombre",
+          "escanos_23j",
+          "gobierno"
+        ],
+        "properties": {
+          "programa_2023": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sin_programa": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "votaciones": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "fecha",
+          "tipo",
+          "subtipo",
+          "expediente",
+          "resultado",
+          "excluida_tramite",
+          "votos",
+          "url_xml",
+          "url_sesion",
+          "url_bocg",
+          "url_boe"
+        ],
+        "properties": {
+          "subtipo": {
+            "enum": [
+              "normal",
+              "devolucion",
+              "texto_alternativo",
+              "tramite"
+            ]
+          },
+          "resultado": {
+            "enum": [
+              "aprobada",
+              "rechazada"
+            ]
+          },
+          "url_xml": {
+            "type": "string",
+            "pattern": "^https://www\\.congreso\\.es/"
+          },
+          "url_sesion": {
+            "type": "string",
+            "pattern": "^https://www\\.congreso\\.es/"
+          },
+          "url_bocg": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url_boe": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^https://www\\.boe\\.es/"
+          }
+        }
+      }
+    },
+    "promesas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "partido",
+          "anio",
+          "texto",
+          "cita",
+          "pagina",
+          "tema",
+          "url_programa_pagina"
+        ],
+        "properties": {
+          "url_programa_pagina": {
+            "type": "string",
+            "pattern": "#page=\\d+$"
+          }
+        }
+      }
+    },
+    "temas": {
+      "type": "object"
+    },
+    "cruces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "votacion_id",
+          "promesa_id",
+          "partido",
+          "voto",
+          "dividido",
+          "nivel",
+          "veredicto",
+          "jueces"
+        ],
+        "properties": {
+          "nivel": {
+            "enum": [
+              "veredicto",
+              "juzga_tu"
+            ]
+          },
+          "veredicto": {
+            "enum": [
+              "cumple",
+              "incumple"
+            ]
+          },
+          "jueces": {
+            "type": "object",
+            "minProperties": 3,
+            "maxProperties": 3
+          }
+        }
+      }
+    },
+    "coherencia": {
+      "type": "object"
+    },
+    "gobierno": {
+      "type": "object"
+    },
+    "finanzas": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "gasto_justificado_eur",
+          "endeudamiento_eur",
+          "propuesta_reduccion_subvencion",
+          "pagina",
+          "transparencia",
+          "url_informe"
+        ],
+        "properties": {
+          "pagina": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "url_informe": {
+            "type": "string",
+            "pattern": "^https://"
+          },
+          "transparencia": {
+            "enum": [
+              "cumple",
+              "no_cumple",
+              "sin_dato"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
