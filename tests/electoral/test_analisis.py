@@ -18,7 +18,7 @@ def test_un_partido_que_cambia_de_postura_en_la_misma_ley_aparece_en_coherencia(
     vid = conn.execute("SELECT id FROM votaciones WHERE subtipo = 'devolucion' LIMIT 1").fetchone()[0]
     # Una votación final inventada de la misma ley en la que Vox vota Sí tras haber pedido devolverla
     conn.execute("INSERT INTO votaciones (id, fecha, sesion, numero, tipo, subtipo, es_convalidacion, expediente, texto_subgrupo, clave_iniciativa, resultado, a_favor, en_contra, abstenciones, excluida_tramite, url_xml, url_sesion) "
-                 "VALUES ('999-1', '2025-12-01', 999, 1, 'Dictámenes de Comisiones sobre iniciativas legislativas.', 'normal', 0, 'x', '', ?, 'aprobada', 200, 100, 0, 0, 'u', 'u')", (clave,))
+                 "VALUES ('999-1', '2025-12-01', 999, 1, 'Dictámenes de Comisiones sobre iniciativas legislativas.', 'normal', 0, 'x', '', ?, 'aprobada', 200, 100, 0, 0, 'https://www.congreso.es/webpublica/opendata/votaciones/Leg15/x.zip', 'https://www.congreso.es/es/opendata/votaciones?targetDate=01/12/2025')", (clave,))
     conn.execute("INSERT INTO votos_partido VALUES ('999-1', 'Vox', 'Sí', 0)")
     conn.commit(); conn.close()
     pares = cli("exportar")["coherencia"].get("Vox", [])
