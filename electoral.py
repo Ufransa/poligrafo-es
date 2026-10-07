@@ -1,6 +1,7 @@
 # electoral.py
 """Motor de datos de la web electoral del 29N. Ver docs/superpowers/specs/2026-10-07-web-electoral-29n-design.md."""
 import argparse
+import random
 from pathlib import Path
 
 from src.electoral import db as edb
@@ -62,14 +63,41 @@ def cmd_fuentes(a, conn):
     conn.commit()
 
 
+def cmd_muestra(a, conn):
+    datos = exportar.construir(conn, RAIZ)
+    prom = {p["id"]: p for p in datos["promesas"]}
+    vots = {v["id"]: v for v in datos["votaciones"]}
+    veredictos = [c for c in datos["cruces"] if c["nivel"] == "veredicto"]
+    random.Random(a.semilla).shuffle(veredictos)
+    L = ["# Muestra de veredictos para revisar antes de publicar", "",
+         "Marca la casilla si estás de acuerdo. Si no, déjala vacía y escribe por qué en «Nota».", ""]
+    for n, c in enumerate(veredictos[: a.n], 1):
+        p, v = prom[c["promesa_id"]], vots[c["votacion_id"]]
+        L += [f"## {n}. {c['partido']}: {c['veredicto'].upper()}", "",
+              f"- **Se votó ({v['fecha']}):** {v['expediente'][:300]}",
+              f"- **{c['partido']} votó:** {c['voto']}",
+              f"- **Promesa:** {p['texto']}",
+              f"- **Cita literal (pág. {p['pagina']}):** «{p['cita']}» ({p['url_programa_pagina']})", "",
+              f"- [ ] De acuerdo con «{c['veredicto']}»", "- Nota: ", ""]
+    Path(a.salida).write_text("\n".join(L), encoding="utf-8")
+    print(f"{min(a.n, len(veredictos))} casos en {a.salida}")
+
+
+def cmd_todo(a, conn):
+    for paso, args in (("descargar", []), ("fuentes", []), ("extraer", ["--tope", str(a.tope_extraer)]),
+                       ("juzgar", ["--tope", str(a.tope_juzgar)]), ("exportar", [])):
+        print("==>", paso, flush=True)
+        main([paso, *args, "--db", a.db])
+
+
 def cmd_exportar(a, conn):
     exportar.escribir(exportar.construir(conn, RAIZ), Path(a.salida))
 
 
-def main():
+def main(argv=None):
     p = argparse.ArgumentParser(prog="electoral")
     sub = p.add_subparsers(dest="cmd", required=True)
-    for nombre in ("descargar", "fuentes", "ingest-programa", "extraer", "juzgar", "exportar"):
+    for nombre in ("descargar", "fuentes", "ingest-programa", "extraer", "juzgar", "exportar", "muestra", "todo"):
         s = sub.add_parser(nombre)
         s.add_argument("--db", default=str(RAIZ / "electoral.db"))
     for arg in ("anio", "partido", "origen"):
@@ -78,12 +106,17 @@ def main():
     sub.choices["juzgar"].add_argument("--tope", type=float, default=4.0)
     sub.choices["juzgar"].add_argument("--k", type=int, default=20)
     sub.choices["fuentes"].add_argument("--iniciativas", help="JSON con iniciativas (por defecto, open data del Congreso)")
+    sub.choices["muestra"].add_argument("--n", type=int, default=30)
+    sub.choices["muestra"].add_argument("--semilla", type=int, default=29)
+    sub.choices["muestra"].add_argument("--salida", default=str(RAIZ / "docs" / "revision_muestra.md"))
+    sub.choices["todo"].add_argument("--tope-extraer", type=float, default=1.0)
+    sub.choices["todo"].add_argument("--tope-juzgar", type=float, default=4.0)
     sub.choices["fuentes"].add_argument("--boe", help="JSON clave -> identificador BOE (por defecto, API del BOE)")
     sub.choices["descargar"].add_argument("--zips", help="carpeta con ZIPs ya bajados (no descarga nada)")
     sub.choices["exportar"].add_argument("--salida", default=str(RAIZ / "datos.json"))
-    a = p.parse_args()
+    a = p.parse_args(argv)
     conn = edb.conectar(Path(a.db))
-    {"descargar": cmd_descargar, "ingest-programa": cmd_ingest, "extraer": cmd_extraer, "juzgar": cmd_juzgar, "fuentes": cmd_fuentes,
+    {"descargar": cmd_descargar, "ingest-programa": cmd_ingest, "extraer": cmd_extraer, "juzgar": cmd_juzgar, "fuentes": cmd_fuentes, "muestra": cmd_muestra, "todo": cmd_todo,
      "exportar": cmd_exportar}[a.cmd](a, conn)
 
 

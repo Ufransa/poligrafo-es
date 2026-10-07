@@ -28,6 +28,8 @@ Para cada partido con promesas candidatas, decide si alguna promesa trata de la 
 REGLA DE FUERZA (obligatoria en cada match con veredicto):
 - "directa": la votación decide EXACTAMENTE la acción prometida: la misma ley, la misma medida o el mismo objeto concreto.
 - "indirecta": el tema es cercano pero la votación no decide lo prometido.
+- Una proposición no de ley o una moción que pide EXACTAMENTE la medida prometida es "directa": no obliga,
+  pero es la posición expresa del partido sobre esa medida.
 Si dudas entre directa e indirecta, es indirecta.
 
 Responde SOLO con JSON:
@@ -40,6 +42,15 @@ def aviso_sentido(v) -> str:
                 "del original; votar No es rechazarlo. No es una votación sobre aprobar o tumbar la ley original.")
     if v["subtipo"] == "devolucion":
         return "AVISO: se vota una ENMIENDA DE DEVOLUCIÓN: votar Sí es tumbar el proyecto, votar No es dejar que siga."
+    return ""
+
+
+def significado(subtipo: str, voto: str) -> str:
+    """El sentido real del voto, escrito junto al voto: los modelos baratos leen al revés las devoluciones."""
+    if subtipo == "devolucion":
+        return {"Sí": " (= quiere tumbar el proyecto)", "No": " (= a favor de que el proyecto siga adelante)"}.get(voto, "")
+    if subtipo == "texto_alternativo":
+        return {"Sí": " (= apoya el texto alternativo en lugar del original)", "No": " (= rechaza el texto alternativo)"}.get(voto, "")
     return ""
 
 
@@ -75,7 +86,7 @@ def prompt(v, votos, cands) -> str:
         partes.append(f"Qué se vota exactamente: {v['texto_subgrupo']}")
     partes.append(f"Resultado: {v['resultado']}")
     partes.append("\nSENTIDO DE VOTO DE CADA PARTIDO EN ESTA VOTACIÓN:")
-    partes += [f"  {r['partido']}: {r['voto']}" for r in votos]
+    partes += [f"  {r['partido']}: {r['voto']}{significado(v['subtipo'], r['voto'])}" for r in votos]
     if aviso_sentido(v):
         partes.append("\n" + aviso_sentido(v))
     por_partido = {}
