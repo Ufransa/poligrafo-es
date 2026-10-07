@@ -4,6 +4,8 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+from src.electoral import analisis
+
 VERSION_CONTRATO = "1.0.0"
 
 
@@ -74,6 +76,9 @@ def construir(conn, raiz: Path) -> dict:
         "promesas": promesas,
         "temas": _temas(promesas),
         "cruces": cruces,
+        "coherencia": analisis.coherencia(conn),
+        "gobierno": analisis.gobierno(conn, partidos),
+        "finanzas": analisis.finanzas(raiz),
     }
 
 
