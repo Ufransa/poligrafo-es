@@ -202,3 +202,24 @@ def test_un_decreto_ley_no_enlaza_el_bocg_de_otro_decreto_con_numero_parecido(cl
     cli("fuentes", "--iniciativas", str(ini), "--boe", str(FIX / "boe_muestra.json"))
     v = next(v for v in cli("exportar")["votaciones"] if v["clave_iniciativa"] == "real decreto-ley 3/2026" and not v["excluida_tramite"])
     assert v["url_bocg"] is None
+
+
+def test_una_enmienda_anunciada_en_el_titulo_es_votacion_parcial(cli, tmp_path):
+    """El Congreso a veces no rellena el subgrupo y escribe «Votación de la enmienda.» al final del título."""
+    zips = _zip_sintetico(tmp_path / "z", [
+        ("Proposición de Ley de prueba sobre donantes.\nVotación de la enmienda.", "No", 150, 190),
+        ("Proposición de Ley de prueba sobre donantes.", "No", 190, 150),
+    ])
+    cli("descargar", "--zips", zips)
+    sub = {v["numero"]: v["subtipo"] for v in cli("exportar")["votaciones"]}
+    assert sub == {1: "parcial", 2: "normal"}
+
+
+def test_una_votacion_que_pasa_a_excluida_deja_de_publicar_sus_cruces(cli, tmp_path):
+    """Si una corrección de datos reclasifica una votación como parcial, sus juicios anteriores no se publican."""
+    ley = "Proposición de Ley sobre el alquiler de vivienda y de reforma de la Ley 29/1994 de Arrendamientos Urbanos."
+    _preparar(cli, _zip_sintetico(tmp_path / "a", [(ley, "No", 190, 150)]), LLM_FALSO_TODOS="1")
+    cli("juzgar", "--k", "3", env=_env(LLM_FALSO_TODOS="1"))
+    assert cli("exportar")["cruces"], "sin cruces la prueba no mide nada"
+    cli("descargar", "--zips", _zip_sintetico(tmp_path / "b", [(ley + "\nVotación de la enmienda.", "No", 190, 150)]))
+    assert cli("exportar")["cruces"] == []

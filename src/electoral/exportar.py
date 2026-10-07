@@ -56,7 +56,7 @@ def _cruces(conn) -> list[dict]:
     salida = []
     for c in conn.execute("""SELECT c.*, vp.voto, vp.dividido, v.subtipo FROM cruces c
                              JOIN votos_partido vp ON vp.votacion_id = c.votacion_id AND vp.partido = c.partido
-                             JOIN votaciones v ON v.id = c.votacion_id
+                             JOIN votaciones v ON v.id = c.votacion_id AND v.excluida_tramite = 0
                              ORDER BY c.votacion_id, c.partido"""):
         jueces = json.loads(c["jueces"])
         if any(r and "postura" not in r for r in jueces.values()):

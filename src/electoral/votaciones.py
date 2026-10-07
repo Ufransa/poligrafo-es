@@ -124,6 +124,9 @@ def clasificar(v: dict) -> tuple[str, bool]:
     # punto suelto. Su voto es táctica parlamentaria, no la postura sobre la iniciativa.
     if v["titulo_subgrupo"] and "totalidad" not in v["titulo_subgrupo"].lower():
         return "parcial", False
+    # A veces el subgrupo viene vacío y la enmienda se anuncia al final del título.
+    if re.search(r"votación de (la|las) enmiendas?\.?\s*$", v["expediente"].lower()):
+        return "parcial", False
     es_conv = v["tipo"].lower().startswith("convalidación") and "real decreto-ley" in v["expediente"].lower()
     return "normal", es_conv
 
