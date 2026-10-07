@@ -141,6 +141,7 @@
           "dividido",
           "nivel",
           "veredicto",
+          "revisado_a_mano",
           "jueces"
         ],
         "properties": {
@@ -155,6 +156,9 @@
               "cumple",
               "incumple"
             ]
+          },
+          "revisado_a_mano": {
+            "type": "boolean"
           },
           "jueces": {
             "type": "object",

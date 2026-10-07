@@ -33,7 +33,10 @@ def test_promesa_en_contra_y_voto_no_es_cumplir(cli, zips):
 
 
 def test_promesa_en_contra_y_voto_si_es_incumplir(cli, zips):
-    pares = [(v, c) for v, c in _veredictos(_cargar(cli, zips, LLM_FALSO_POSTURA="en_contra"))
+    datos = _cargar(cli, zips, LLM_FALSO_POSTURA="en_contra")
+    tipos = {v["id"]: v for v in datos["votaciones"]}
+    pares = [(tipos[c["votacion_id"]], c) for c in datos["cruces"]]
+    pares = [(v, c) for v, c in pares
              if v["subtipo"] == "normal" and c["voto"] == "Sí"]
     assert pares and all(c["veredicto"] == "incumple" for _, c in pares)
 

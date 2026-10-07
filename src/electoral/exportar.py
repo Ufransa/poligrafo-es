@@ -49,7 +49,7 @@ def _temas(promesas: list[dict]) -> dict:
     return dict(salida)
 
 
-def _cruces(conn) -> list[dict]:
+def _cruces(conn, confirmados: set) -> list[dict]:
     """El nivel se recalcula aquí con el voto y el «dividido» actuales: corregir los datos de votos no deja
     veredictos obsoletos."""
     from src.electoral import juez
@@ -65,17 +65,30 @@ def _cruces(conn) -> list[dict]:
                          bool(c["dividido"]), analisis.postura(c["subtipo"], c["voto"]))
         if not res:
             continue
+        clave = (c["votacion_id"], c["promesa_id"], c["partido"], res[1])
+        revisado = clave in confirmados
+        # Un incumple solo se afirma revisado a mano: el juez ve el titulo, no el contenido de la iniciativa.
+        if res == ("veredicto", "incumple") and not revisado:
+            res = ("juzga_tu", "incumple")
         salida.append({"votacion_id": c["votacion_id"], "promesa_id": c["promesa_id"], "partido": c["partido"],
                        "voto": c["voto"], "dividido": bool(c["dividido"]), "nivel": res[0],
-                       "veredicto": res[1], "jueces": jueces})
+                       "veredicto": res[1], "revisado_a_mano": revisado and res[0] == "veredicto", "jueces": jueces})
     return salida
 
 
-def construir(conn, raiz: Path) -> dict:
+def _confirmados(ruta: Path) -> set:
+    """Cruces que una persona ha revisado y confirmado: config/revision_manual.json."""
+    if not ruta.exists():
+        return set()
+    datos = json.loads(ruta.read_text(encoding="utf-8"))
+    return {(x["votacion_id"], x["promesa_id"], x["partido"], x["veredicto"]) for x in datos["confirmados"]}
+
+
+def construir(conn, raiz: Path, revision: Path | None = None) -> dict:
     partidos = json.loads((raiz / "config" / "partidos_electoral.json").read_text(encoding="utf-8"))
     votaciones = _votaciones(conn)
     promesas = _promesas(conn)
-    cruces = _cruces(conn)
+    cruces = _cruces(conn, _confirmados(revision or raiz / "config" / "revision_manual.json"))
     return {
         "meta": {
             "version_contrato": VERSION_CONTRATO,

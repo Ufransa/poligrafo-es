@@ -93,7 +93,7 @@ def cmd_todo(a, conn):
 
 
 def cmd_exportar(a, conn):
-    exportar.escribir(exportar.construir(conn, RAIZ), Path(a.salida))
+    exportar.escribir(exportar.construir(conn, RAIZ, Path(a.revision) if a.revision else None), Path(a.salida))
 
 
 def main(argv=None):
@@ -116,6 +116,7 @@ def main(argv=None):
     sub.choices["fuentes"].add_argument("--boe", help="JSON clave -> identificador BOE (por defecto, API del BOE)")
     sub.choices["descargar"].add_argument("--zips", help="carpeta con ZIPs ya bajados (no descarga nada)")
     sub.choices["exportar"].add_argument("--salida", default=str(RAIZ / "datos.json"))
+    sub.choices["exportar"].add_argument("--revision", help="JSON con los cruces confirmados a mano (por defecto, config/revision_manual.json)")
     a = p.parse_args(argv)
     conn = edb.conectar(Path(a.db))
     {"descargar": cmd_descargar, "ingest-programa": cmd_ingest, "extraer": cmd_extraer, "juzgar": cmd_juzgar, "fuentes": cmd_fuentes, "muestra": cmd_muestra, "todo": cmd_todo,
