@@ -12,11 +12,12 @@
     "escanos_23j": 121,
     "gobierno": [
       [
-        "2023-11-17",
+        "2023-08-17",
         null
       ]
     ],
-    "programa_2023": "https://www.elnacional.cat/uploads/s1/42/65/82/06/programa-electoral-psoe-eleccions-generals-2023-pedro-sanchez.pdf"
+    "programa_2023": "https://www.elnacional.cat/uploads/s1/42/65/82/06/programa-electoral-psoe-eleccions-generals-2023-pedro-sanchez.pdf",
+    "nota_gobierno": "En funciones del 17-08-2023 al 21-11-2023; después, Gobierno de coalición con Sumar."
   },
   {
     "id": "Vox",
@@ -31,11 +32,12 @@
     "escanos_23j": 31,
     "gobierno": [
       [
-        "2023-11-17",
+        "2023-08-17",
         null
       ]
     ],
-    "programa_2023": "https://www.newtral.es/wp-content/uploads/2023/07/Programa_electoral_sumar_23j_2023.pdf"
+    "programa_2023": "https://www.newtral.es/wp-content/uploads/2023/07/Programa_electoral_sumar_23j_2023.pdf",
+    "nota_gobierno": "Yolanda Díaz fue ministra en el Gobierno en funciones (17-08 al 21-11-2023) y en la coalición posterior."
   },
   {
     "id": "ERC",
@@ -94,12 +96,13 @@
     "escanos_23j": 0,
     "gobierno": [
       [
-        "2023-11-17",
-        "2023-12-12"
+        "2023-08-17",
+        "2023-11-21"
       ]
     ],
     "programa_2023": null,
-    "sin_programa": "En 2023 se presentó dentro de Sumar: sus promesas de 2023 son las de Sumar."
+    "sin_programa": "En 2023 se presentó dentro de Sumar: sus promesas de 2023 son las de Sumar.",
+    "nota_gobierno": "Solo en el Gobierno en funciones (Belarra y Montero, ministras hasta el 21-11-2023); no entró en el Gobierno de coalición."
   },
   {
     "id": "Compromís",
