@@ -44,21 +44,35 @@ def _temas(promesas: list[dict]) -> dict:
     return dict(salida)
 
 
+def _cruces(conn) -> list[dict]:
+    salida = []
+    for c in conn.execute("""SELECT c.*, vp.voto, vp.dividido FROM cruces c
+                             JOIN votos_partido vp ON vp.votacion_id = c.votacion_id AND vp.partido = c.partido
+                             ORDER BY c.votacion_id, c.partido"""):
+        salida.append({"votacion_id": c["votacion_id"], "promesa_id": c["promesa_id"], "partido": c["partido"],
+                       "voto": c["voto"], "dividido": bool(c["dividido"]), "nivel": c["nivel"],
+                       "veredicto": c["veredicto"], "jueces": json.loads(c["jueces"])})
+    return salida
+
+
 def construir(conn, raiz: Path) -> dict:
     partidos = json.loads((raiz / "config" / "partidos_electoral.json").read_text(encoding="utf-8"))
     votaciones = _votaciones(conn)
     promesas = _promesas(conn)
+    cruces = _cruces(conn)
     return {
         "meta": {
             "version_contrato": VERSION_CONTRATO,
             "generado": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "periodo": {"desde": "2023-08-17", "hasta": max((v["fecha"] for v in votaciones), default=None)},
-            "recuentos": {"votaciones": len(votaciones), "promesas": len(promesas)},
+            "recuentos": {"votaciones": len(votaciones), "promesas": len(promesas),
+                          "veredictos": sum(c["nivel"] == "veredicto" for c in cruces)},
         },
         "partidos": partidos,
         "votaciones": votaciones,
         "promesas": promesas,
         "temas": _temas(promesas),
+        "cruces": cruces,
     }
 
 
