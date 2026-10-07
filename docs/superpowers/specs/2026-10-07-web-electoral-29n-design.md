@@ -142,8 +142,25 @@ Tres pantallas, móvil primero, sin jerga:
 2. **Ficha de partido.** Promesas principales con su estado; promesa → votación → voto con cita y enlace oficial;
    «A qué dedica su programa» (temas en %, 2023 y 2026); coherencia; «Lo que hicieron gobernando» (solo PSOE y
    Sumar, en una sección aparte); dinero; «Juzga tú» plegado por defecto.
-3. **«Cómo funciona».** Fuentes, qué es un veredicto y por qué exige tres jueces, qué no se mide (corrupción y
-   por qué) y fecha de la última actualización.
+3. **«Sobre este proyecto».** Página de transparencia, escrita en lenguaje llano:
+   - **Quién y por qué:** proyecto personal para votar con datos y no con simpatías; sin afiliación, sin financiación, sin publicidad.
+   - **En qué se basa:** cada fuente oficial con su enlace.
+   - **Cómo se hizo, paso a paso:** extracción de promesas, cruce con votos, tres jueces de familias distintas, «juzga tú».
+   - **Cuánto acierta:** las pruebas reales sin maquillar (del 64 % inicial a la configuración final, 19/19, y la muestra de 30 revisada a mano antes de publicar).
+   - **Qué no mide y por qué:** corrupción, el texto completo de las leyes, partidos sin programa propio en 2023.
+   - **Cómo comprobar cualquier dato uno mismo.**
+   - Fecha de la última actualización.
+
+**Referencias en cada cruce** (a un toque de distancia, nunca escondidas):
+- Votación: página del Congreso de ese día de pleno y archivo oficial de la votación.
+- Iniciativa: PDF del Boletín Oficial de las Cortes Generales (campo `ENLACESBOCG` del open data de iniciativas).
+- Ley o decreto aprobado: entrada en el BOE.
+- Promesa: PDF del programa abierto en la página exacta (`#page=N`), junto a la cita literal.
+- Finanzas: informe del Tribunal de Cuentas.
+- Lo que respondió cada uno de los tres jueces.
+
+El contrato (§6) incorpora estas URL: `votaciones.url_sesion`, `votaciones.url_xml`, `votaciones.url_bocg`,
+`votaciones.url_boe`, `promesas.url_programa_pagina`, `finanzas.url_informe`.
 
 **No lleva:** ranking ni comparador de «mejores», comentarios ni nada social. Los colores de partido no son
 protagonistas; se decide con las propuestas visuales.
@@ -204,6 +221,6 @@ Según las reglas de Fran: de comportamiento, nunca unitarias. Playwright para l
 |---|---|
 | Pocos veredictos firmes (≈130 estimados) | Es el precio de la precisión; la capa «juzga tú» aporta volumen con honestidad |
 | Los programas de 2026 llegan tarde | La web funciona sin ellos; el bloque aparece como «pendiente» |
-| Un error visible daña la confianza de los allegados | Muestra de 30 revisada antes de publicar; cada veredicto lleva su fuente; página «Cómo funciona» |
+| Un error visible daña la confianza de los allegados | Muestra de 30 revisada antes de publicar; cada veredicto lleva su fuente; página «Sobre este proyecto» |
 | Cambios de grupo de diputados mal asignados | Tabla con fechas de alta y baja, y prueba con un caso real |
 | OpenRouter cambia precios o modelos | Modelos configurables; la referencia fija detecta pérdidas de calidad |
