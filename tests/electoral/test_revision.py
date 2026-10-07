@@ -173,3 +173,32 @@ def test_un_fallo_de_red_no_tumba_la_carga_ni_publica_nada_a_medias(cli, zips):
     conn.close()
     cli("juzgar", "--k", "3", env=_env())
     assert cli("exportar")["cruces"]
+
+
+# --- Hallazgo 8: página y cita de cada promesa ---
+
+def test_una_promesa_de_la_segunda_pagina_enlaza_la_segunda_pagina(cli):
+    cli("ingest-programa", "2023", "PSOE", str(FIX / "programa_dos_paginas.pdf"), env=_env())
+    cli("extraer", env=_env())
+    lobbies = next(p for p in cli("exportar")["promesas"] if "lobbies" in p["texto"])
+    assert lobbies["pagina"] == 2 and lobbies["url_programa_pagina"].endswith("#page=2")
+
+
+def test_una_cita_que_no_esta_en_el_programa_no_se_publica(cli):
+    cli("ingest-programa", "2023", "PSOE", str(FIX / "programa_dos_paginas.pdf"), env=_env())
+    cli("extraer", env=_env(LLM_FALSO_CITA_FALSA="1"))
+    assert not [p for p in cli("exportar")["promesas"] if p["texto"] == "Promesa inventada"]
+
+
+# --- Hallazgo 9: el enlace al BOCG no se adivina ---
+
+def test_un_decreto_ley_no_enlaza_el_bocg_de_otro_decreto_con_numero_parecido(cli, zips, tmp_path):
+    import json
+    falsa = [{"OBJETO": "Real Decreto-ley 4/2026, de 3 de febrero, para la revalorización de las pensiones públicas y otras medidas urgentes en materia de Seguridad Social.",
+              "ENLACESBOCG": "https://www.congreso.es/public_oficiales/L15/CONG/BOCG/D/BOCG-15-D-999-1.PDF#page=1"}]
+    ini = tmp_path / "ini.json"
+    ini.write_text(json.dumps(falsa, ensure_ascii=False), encoding="utf-8")
+    cli("descargar", "--zips", zips)
+    cli("fuentes", "--iniciativas", str(ini), "--boe", str(FIX / "boe_muestra.json"))
+    v = next(v for v in cli("exportar")["votaciones"] if v["clave_iniciativa"] == "real decreto-ley 3/2026" and not v["excluida_tramite"])
+    assert v["url_bocg"] is None

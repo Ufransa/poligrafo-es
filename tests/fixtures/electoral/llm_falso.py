@@ -22,10 +22,12 @@ def transporte(body):
     if "FRAGMENTO:" in usuario:                       # extracción de promesas
         promesas = []
         for trozo in usuario.split("PROMESA:")[1:]:      # el bloque llega en una sola línea
-            texto = trozo.split(" Hemos")[0].strip()
+            texto = re.sub(r"\[\[p\. \d+\]\]", "", trozo.split(" Hemos")[0]).strip()
             if texto:
                 promesas.append({"promesa": texto, "cita": texto, "tema": "Vivienda" if "alquiler" in texto else "Instituciones y calidad democrática",
                                  "procedimental": "real decreto" in texto.lower()})
+        if os.environ.get("LLM_FALSO_CITA_FALSA"):
+            promesas.append({"promesa": "Promesa inventada", "cita": "Esta frase no aparece en ningún programa", "tema": "Vivienda", "procedimental": False})
         return _resp({"promesas": promesas})
     if EXCEPCION and "FRAGMENTO:" not in usuario:
         import requests

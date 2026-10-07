@@ -1,6 +1,9 @@
 # src/electoral/programas.py
 """Programas electorales: PDF → bloques con página → promesas sueltas con tema."""
+import difflib
 import io
+import re
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -36,6 +39,7 @@ Para cada promesa devuelve:
 - "procedimental": true si la promesa trata del procedimiento parlamentario o legislativo (uso del decreto-ley,
   de la urgencia, del reglamento de las Cámaras) y no de una materia; false en otro caso.
 
+El fragmento lleva marcas [[p. N]] donde empieza cada página: no las copies en la cita.
 No inventes nada que no esté en el texto. Responde SOLO con JSON:
 {{"promesas": [{{"promesa": str, "cita": str, "tema": str, "procedimental": bool}}]}}"""
 
@@ -60,12 +64,41 @@ def bloques_por_pagina(pdf: bytes) -> list[tuple[int, str]]:
                 continue
             if pagina_inicio is None:
                 pagina_inicio = n
-            actual += ("\n" if actual else "") + texto
+            # La marca permite saber después en qué página está cada cita.
+            actual += ("\n" if actual else "") + f"[[p. {n}]] " + texto
             if len(actual) >= CARACTERES_POR_BLOQUE:
                 bloques.append((pagina_inicio, actual)); actual, pagina_inicio = "", None
     if actual:
         bloques.append((pagina_inicio, actual))
     return bloques
+
+
+MARCA = re.compile(r"\[\[p\. (\d+)\]\]")
+
+
+def _normalizar(t: str) -> str:
+    t = unicodedata.normalize("NFKD", t.lower())
+    t = "".join(c for c in t if not unicodedata.combining(c))
+    t = re.sub(r"(\w)- (\w)", r"\1\2", t)          # palabras partidas con guion al final de línea
+    return re.sub(r"[^\w]+", " ", t).strip()
+
+
+def pagina_de_cita(cita: str, texto_bloque: str) -> int | None:
+    """Página donde aparece la cita dentro del bloque, o None si la cita no está en el programa."""
+    trozos = MARCA.split(texto_bloque)              # ["", "12", "texto p12", "13", "texto p13", ...]
+    paginas = [(int(trozos[i]), _normalizar(trozos[i + 1])) for i in range(1, len(trozos) - 1, 2)]
+    c = _normalizar(MARCA.sub("", cita))
+    if len(c) < 12:
+        return None
+    for n, t in paginas:
+        if c in t:
+            return n
+    # Coincidencia aproximada: el modelo a veces retoca puntuación o una palabra.
+    for n, t in paginas:
+        m = difflib.SequenceMatcher(None, c, t, autojunk=False).find_longest_match(0, len(c), 0, len(t))
+        if m.size >= 0.8 * len(c):
+            return n
+    return None
 
 
 def ingerir(conn, anio: int, partido: str, origen: str) -> int:
@@ -97,8 +130,12 @@ def extraer(conn, llm) -> None:
             if out is None:
                 continue
             for p in out.get("promesas", []):
+                cita = MARCA.sub("", p.get("cita", "")).strip()
+                pagina = pagina_de_cita(cita, b["texto"])
+                if pagina is None:
+                    continue                       # la cita no aparece en el programa: no se publica
                 tema = p.get("tema") if p.get("tema") in TEMAS else "Instituciones y calidad democrática"
                 conn.execute("INSERT INTO promesas (bloque_id, partido, anio, pagina, texto, cita, tema, procedimental) VALUES (?,?,?,?,?,?,?,?)",
-                             (b["id"], b["partido"], b["anio"], b["pagina"], p["promesa"], p.get("cita", ""), tema, int(bool(p.get("procedimental")))))
+                             (b["id"], b["partido"], b["anio"], pagina, p["promesa"], cita, tema, int(bool(p.get("procedimental")))))
             conn.execute("UPDATE bloques SET extraido = 1 WHERE id = ?", (b["id"],))
             conn.commit()
