@@ -1,58 +1,43 @@
 # src/electoral/juez.py
-"""Cruce promesa ↔ votación con tres jueces de familias distintas (validado: 19/19 con unanimidad)."""
+"""Cruce promesa ↔ votación. Tres jueces de familias distintas dicen si la promesa está a favor o en contra de la
+iniciativa; el veredicto (cumple / incumple) lo calcula el código comparando esa postura con el voto."""
 import hashlib
 import json
+import re
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
+from src.electoral import analisis
 from src.electoral.llm import PresupuestoAgotado
 from src.embeddings import embed_texts, from_blob, to_blob
 
 JUECES = ["deepseek/deepseek-v4-pro", "openai/gpt-5-mini", "google/gemini-2.5-flash-lite"]
 
-SISTEMA = """Eres el juez de PolígrafoES. Comparas promesas electorales de 2023 con votaciones del Congreso.
-Neutralidad absoluta: describe, no opines ni califiques.
+SISTEMA = """Eres el juez de PolígrafoES. Comparas promesas electorales de 2023 con iniciativas votadas en el Congreso.
+Neutralidad absoluta: describe, no opines ni califiques. No sabes cómo votó nadie y no debes suponerlo.
 
-Para cada partido con promesas candidatas, decide si alguna promesa trata de la MATERIA CONCRETA que se vota.
+Para cada partido con promesas candidatas, decide si alguna promesa trata de la MATERIA CONCRETA de la iniciativa.
 - Si ninguna: no la incluyas.
-- Si sí: chunk_id de la promesa, y veredicto comparando la promesa con el SENTIDO DE VOTO de ese partido:
-  "cumple" si votó en coherencia con lo que prometió, "incumple" si votó en contra de lo que prometió.
-- Si no puedes afirmarlo con seguridad: veredicto null. Es preferible el silencio a un veredicto dudoso.
-- Si un partido no aparece en SENTIDO DE VOTO, no sabes cómo votó: veredicto null siempre.
-- Una ABSTENCIÓN nunca es "cumple". Es "incumple" solo si prometió explícitamente actuar en esa materia.
+- Si sí: chunk_id de la promesa y su POSTURA frente a la INICIATIVA:
+  "a_favor" si cumplir la promesa exige que la iniciativa salga adelante;
+  "en_contra" si la promesa quiere suprimir, derogar o rechazar lo que la iniciativa impulsa.
+  Ejemplos: «suprimiremos las oficinas de la Agenda 2030» frente a «impulsar la Agenda 2030»: en_contra.
+  «Aprobaremos una ley de atención a la clientela» frente a esa misma ley: a_favor.
+- Si no puedes afirmarlo con seguridad: postura null. Es preferible el silencio a una postura dudosa.
 - Compartir vocabulario NO es pronunciarse.
 - Una promesa sobre PROCEDIMIENTO parlamentario no es un pronunciamiento sobre la materia que se vota.
 - PRUEBA DEL PARAGUAS: ¿serviría esa misma promesa para una ley de un tema completamente distinto? Si sí, null.
-- Lee el AVISO sobre el sentido del voto cuando lo haya.
 
-REGLA DE FUERZA (obligatoria en cada match con veredicto):
-- "directa": la votación decide EXACTAMENTE la acción prometida: la misma ley, la misma medida o el mismo objeto concreto.
-- "indirecta": el tema es cercano pero la votación no decide lo prometido.
+REGLA DE FUERZA (obligatoria en cada match con postura):
+- "directa": la iniciativa decide EXACTAMENTE la acción prometida: la misma ley, la misma medida o el mismo objeto concreto.
+- "indirecta": el tema es cercano pero la iniciativa no decide lo prometido.
 - Una proposición no de ley o una moción que pide EXACTAMENTE la medida prometida es "directa": no obliga,
   pero es la posición expresa del partido sobre esa medida.
 Si dudas entre directa e indirecta, es indirecta.
 
 Responde SOLO con JSON:
-{"matches": [{"party": str, "chunk_id": int, "veredicto": "cumple"|"incumple"|null, "fuerza": "directa"|"indirecta"|null}]}"""
-
-
-def aviso_sentido(v) -> str:
-    if v["subtipo"] == "texto_alternativo":
-        return ("AVISO: se vota una ENMIENDA DE TEXTO ALTERNATIVO. Votar Sí es apoyar ese texto alternativo EN LUGAR "
-                "del original; votar No es rechazarlo. No es una votación sobre aprobar o tumbar la ley original.")
-    if v["subtipo"] == "devolucion":
-        return "AVISO: se vota una ENMIENDA DE DEVOLUCIÓN: votar Sí es tumbar el proyecto, votar No es dejar que siga."
-    return ""
-
-
-def significado(subtipo: str, voto: str) -> str:
-    """El sentido real del voto, escrito junto al voto: los modelos baratos leen al revés las devoluciones."""
-    if subtipo == "devolucion":
-        return {"Sí": " (= quiere tumbar el proyecto)", "No": " (= a favor de que el proyecto siga adelante)"}.get(voto, "")
-    if subtipo == "texto_alternativo":
-        return {"Sí": " (= apoya el texto alternativo en lugar del original)", "No": " (= rechaza el texto alternativo)"}.get(voto, "")
-    return ""
+{"matches": [{"party": str, "chunk_id": int, "postura": "a_favor"|"en_contra"|null, "fuerza": "directa"|"indirecta"|null}]}"""
 
 
 def asegurar_embeddings(conn) -> None:
@@ -82,15 +67,18 @@ def candidatos(conn, votaciones, k):
     return {v["id"]: [P[j] for j in np.argsort(-Z[i])[:k]] for i, v in enumerate(votaciones)}
 
 
-def prompt(v, votos, cands) -> str:
-    partes = [f"VOTACIÓN:\nAsunto: {v['expediente']}\nTipo de sesión: {v['tipo']}"]
-    if v["texto_subgrupo"]:
-        partes.append(f"Qué se vota exactamente: {v['texto_subgrupo']}")
-    partes.append(f"Resultado: {v['resultado']}")
-    partes.append("\nSENTIDO DE VOTO DE CADA PARTIDO EN ESTA VOTACIÓN:")
-    partes += [f"  {r['partido']}: {r['voto']}{significado(v['subtipo'], r['voto'])}" for r in votos]
-    if aviso_sentido(v):
-        partes.append("\n" + aviso_sentido(v))
+DEVOLUCION = re.compile(r"^.*?devoluci[oó]n (?:al|a la|del|de la) ", re.IGNORECASE)
+
+
+def prompt(v, cands) -> str:
+    """Solo la iniciativa y las promesas. Sin votos: el juez no puede acomodar la postura a lo que se votó."""
+    if v["subtipo"] == "devolucion":
+        # Solo el proyecto: si el juez ve la enmienda, la toma por la iniciativa. El voto se invierte en el código.
+        partes = [f"INICIATIVA:\nAsunto: {DEVOLUCION.sub('', v['expediente'])}"]
+    else:
+        partes = [f"INICIATIVA:\nAsunto: {v['expediente']}\nTipo de sesión: {v['tipo']}"]
+        if v["texto_subgrupo"]:
+            partes.append(f"Qué se vota exactamente: {v['texto_subgrupo']}")
     por_partido = {}
     for p in cands:
         por_partido.setdefault(p["partido"], []).append(p)
@@ -117,17 +105,24 @@ def estables(llm, modelo, texto, validos: dict):
                 pid = int(m.get("chunk_id"))
             except (TypeError, ValueError):
                 continue
-            if validos.get(pid) and m.get("party") == validos[pid] and m.get("veredicto") in ("cumple", "incumple"):
-                pasada[(validos[pid], pid)] = (m.get("veredicto"), m.get("fuerza"))
+            if validos.get(pid) and m.get("party") == validos[pid] and m.get("postura") in ("a_favor", "en_contra"):
+                pasada[(validos[pid], pid)] = (m.get("postura"), m.get("fuerza"))
         pasadas.append(pasada)
     return {k: x for k, x in pasadas[0].items() if pasadas[1].get(k) == x}
 
 
-def nivel(respuestas: dict, dividido: bool):
-    """(nivel, veredicto) a partir de lo que dijo cada juez sobre un cruce. None si no se publica."""
+def nivel(respuestas: dict, dividido: bool, postura_voto: str | None):
+    """(nivel, veredicto). El juez da la postura de la promesa; el veredicto sale de compararla con el voto.
+
+    None si no se publica: sin acuerdo de los jueces, o si el voto no expresa postura (abstención, no vota,
+    texto alternativo).
+    """
+    if postura_voto is None:
+        return None
     dados = [r for r in respuestas.values() if r is not None]
-    for veredicto in ("cumple", "incumple"):
-        coinciden = [r for r in dados if r[0] == veredicto]
+    for postura in ("a_favor", "en_contra"):
+        coinciden = [r for r in dados if r[0] == postura]
+        veredicto = "cumple" if postura == postura_voto else "incumple"
         if len(coinciden) == len(JUECES) and all(r[1] == "directa" for r in coinciden) and not dividido:
             return "veredicto", veredicto
         if len(coinciden) >= 2:
@@ -135,9 +130,9 @@ def nivel(respuestas: dict, dividido: bool):
     return None
 
 
-def huella(cands, votos) -> str:
-    """Lo que vio el juez: si cambian los candidatos o los votos, el expediente se vuelve a juzgar."""
-    base = json.dumps([sorted(p["id"] for p in cands), [(r["partido"], r["voto"]) for r in votos]])
+def huella(cands) -> str:
+    """Lo que vio el juez: si cambian los candidatos o las instrucciones, el expediente se vuelve a juzgar."""
+    base = json.dumps([sorted(p["id"] for p in cands), hashlib.sha1(SISTEMA.encode("utf-8")).hexdigest()])
     return hashlib.sha1(base.encode("utf-8")).hexdigest()
 
 
@@ -149,19 +144,20 @@ def juzgar(conn, llm, k=20) -> int:
         return 0
     asegurar_embeddings(conn)
     hechas = {r[0]: r[1] for r in conn.execute("SELECT votacion_id, respuestas FROM juicios WHERE completo = 1")}
-    todas = conn.execute("SELECT * FROM votaciones WHERE excluida_tramite = 0").fetchall()
+    # El texto alternativo no se juzga: votar un texto que sustituye al original no es una postura sobre la ley.
+    todas = conn.execute("SELECT * FROM votaciones WHERE excluida_tramite = 0 AND subtipo != 'texto_alternativo'").fetchall()
     cands = candidatos(conn, todas, k)
     # La conexión SQLite no se comparte entre hilos: todo lo que se lee de la base se lee aquí, antes.
     votos_de = {v["id"]: conn.execute("SELECT * FROM votos_partido WHERE votacion_id = ? ORDER BY partido",
                                       (v["id"],)).fetchall() for v in todas}
-    huellas = {v["id"]: huella(cands.get(v["id"], []), votos_de[v["id"]]) for v in todas}
+    huellas = {v["id"]: huella(cands.get(v["id"], [])) for v in todas}
     vs = [v for v in todas if hechas.get(v["id"]) != huellas[v["id"]]]
 
     def uno(v):
         c = cands.get(v["id"], [])
         if not c:
             return v, {m: {} for m in JUECES}          # sin candidatos no hay nada que preguntar
-        texto = prompt(v, votos_de[v["id"]], c)
+        texto = prompt(v, c)
         validos = {p["id"]: p["partido"] for p in c}
         return v, {m: estables(llm, m, texto, validos) for m in JUECES}
 
@@ -175,14 +171,15 @@ def juzgar(conn, llm, k=20) -> int:
             if any(r is None for r in por_juez.values()):
                 continue                       # algún juez falló: el expediente queda pendiente
             dividido = {r["partido"]: bool(r["dividido"]) for r in votos_de[v["id"]]}
+            voto = {r["partido"]: r["voto"] for r in votos_de[v["id"]]}
             conn.execute("DELETE FROM cruces WHERE votacion_id = ?", (v["id"],))
             for clave in set().union(*[set(r) for r in por_juez.values()]):
                 partido, promesa_id = clave
                 respuestas = {m: por_juez[m].get(clave) for m in JUECES}
-                res = nivel(respuestas, dividido.get(partido, True))
+                res = nivel(respuestas, dividido.get(partido, True), analisis.postura(v["subtipo"], voto.get(partido)))
                 if res:
                     conn.execute("INSERT INTO cruces VALUES (?,?,?,?,?,?)", (v["id"], promesa_id, partido, res[0], res[1], json.dumps(
-                        {m: ({"veredicto": r[0], "fuerza": r[1]} if r else None) for m, r in respuestas.items()}, ensure_ascii=False)))
+                        {m: ({"postura": r[0], "fuerza": r[1]} if r else None) for m, r in respuestas.items()}, ensure_ascii=False)))
             conn.execute("INSERT OR REPLACE INTO juicios VALUES (?, 1, ?)", (v["id"], huellas[v["id"]]))
             conn.commit()
             cerrados += 1

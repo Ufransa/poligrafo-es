@@ -54,11 +54,15 @@ def _cruces(conn) -> list[dict]:
     veredictos obsoletos."""
     from src.electoral import juez
     salida = []
-    for c in conn.execute("""SELECT c.*, vp.voto, vp.dividido FROM cruces c
+    for c in conn.execute("""SELECT c.*, vp.voto, vp.dividido, v.subtipo FROM cruces c
                              JOIN votos_partido vp ON vp.votacion_id = c.votacion_id AND vp.partido = c.partido
+                             JOIN votaciones v ON v.id = c.votacion_id
                              ORDER BY c.votacion_id, c.partido"""):
         jueces = json.loads(c["jueces"])
-        res = juez.nivel({m: ((r["veredicto"], r["fuerza"]) if r else None) for m, r in jueces.items()}, bool(c["dividido"]))
+        if any(r and "postura" not in r for r in jueces.values()):
+            continue                           # juicio del modelo antiguo (veredicto directo): se rehace al juzgar
+        res = juez.nivel({m: ((r["postura"], r["fuerza"]) if r else None) for m, r in jueces.items()},
+                         bool(c["dividido"]), analisis.postura(c["subtipo"], c["voto"]))
         if not res:
             continue
         salida.append({"votacion_id": c["votacion_id"], "promesa_id": c["promesa_id"], "partido": c["partido"],

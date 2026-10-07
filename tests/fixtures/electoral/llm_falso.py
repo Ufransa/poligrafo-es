@@ -9,7 +9,8 @@ COSTE = float(os.environ.get("LLM_FALSO_COSTE", "0.001"))
 MODO = os.environ.get("LLM_FALSO_MODO", "acuerdo")
 FALLA_JUEZ = os.environ.get("LLM_FALSO_FALLA", "")   # modelo que devuelve basura
 PARTIDO_EQUIVOCADO = os.environ.get("LLM_FALSO_PARTIDO", "")   # el juez atribuye la promesa a otro partido
-EXCEPCION = os.environ.get("LLM_FALSO_EXCEPCION", "")          # fallo de red al llamar a los jueces
+EXCEPCION = os.environ.get("LLM_FALSO_EXCEPCION", "")        # fallo de red al llamar a los jueces
+POSTURA = os.environ.get("LLM_FALSO_POSTURA", "a_favor")    # postura de la promesa frente a la iniciativa
 
 
 def _resp(obj):
@@ -32,6 +33,10 @@ def transporte(body):
     if EXCEPCION and "FRAGMENTO:" not in usuario:
         import requests
         raise requests.ConnectionError("red caída (simulada)")
+    if os.environ.get("LLM_FALSO_FALLA_SI_VE_VOTO") and "SENTIDO DE VOTO" in usuario:
+        return {"choices": [{"message": {"content": "no es json"}}], "usage": {"cost": COSTE}}
+    if os.environ.get("LLM_FALSO_FALLA_SI_VE_DEVOLUCION") and "devoluci" in usuario.lower():
+        return {"choices": [{"message": {"content": "no es json"}}], "usage": {"cost": COSTE}}
     if FALLA_JUEZ and modelo == FALLA_JUEZ:
         return {"choices": [{"message": {"content": "no es json"}}], "usage": {"cost": COSTE}}
     ids = re.findall(r"\[chunk_id=(\d+)\]", usuario)
@@ -45,12 +50,12 @@ def transporte(body):
             m = re.match(r"\[chunk_id=(\d+)\]", linea.strip())
             if m:
                 pares.append((actual, int(m.group(1))))
-        return _resp({"matches": [{"party": p, "chunk_id": i, "veredicto": "cumple", "fuerza": "directa"} for p, i in pares]})
+        return _resp({"matches": [{"party": p, "chunk_id": i, "postura": POSTURA, "fuerza": "directa"} for p, i in pares]})
     if not ids:
         return _resp({"resumen": "", "que_cambia": "", "matches": []})
     fuerza = "directa"
     if MODO == "indirecta" or (MODO == "dos" and modelo == "google/gemini-2.5-flash-lite"):
         fuerza = "indirecta" if MODO == "indirecta" else None
-    veredicto = None if fuerza is None else "cumple"
+    postura = None if fuerza is None else POSTURA
     return _resp({"resumen": "r", "que_cambia": "q", "matches": [
-        {"party": PARTIDO_EQUIVOCADO or partidos[0], "chunk_id": int(ids[0]), "promesa": "p", "veredicto": veredicto, "fuerza": fuerza}]})
+        {"party": PARTIDO_EQUIVOCADO or partidos[0], "chunk_id": int(ids[0]), "postura": postura, "fuerza": fuerza}]})
