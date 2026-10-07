@@ -40,4 +40,10 @@ def conectar(ruta: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(ruta, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.executescript(ESQUEMA)
+    for col in ("url_bocg", "url_boe"):
+        try:
+            conn.execute(f"ALTER TABLE votaciones ADD COLUMN {col} TEXT")
+        except sqlite3.OperationalError:
+            pass
+    conn.execute("CREATE TABLE IF NOT EXISTS boe (clave TEXT PRIMARY KEY, identificador TEXT)")
     return conn

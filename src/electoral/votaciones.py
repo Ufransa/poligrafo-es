@@ -170,8 +170,13 @@ def url_xml(nombre_zip: str, sesion: int, fecha_iso: str) -> str:
 
 def guardar(conn, v: dict, mapa: dict) -> None:
     subtipo, es_conv = clasificar(v)
+    columnas = ("id", "fecha", "sesion", "numero", "tipo", "subtipo", "es_convalidacion", "expediente",
+                "texto_subgrupo", "clave_iniciativa", "resultado", "a_favor", "en_contra", "abstenciones",
+                "excluida_tramite", "url_xml", "url_sesion")
+    # Upsert con columnas explícitas: volver a descargar no borra los enlaces que ya resolvió `fuentes`.
     conn.execute(
-        "INSERT OR REPLACE INTO votaciones VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        f"INSERT INTO votaciones ({', '.join(columnas)}) VALUES ({', '.join('?' * len(columnas))}) "
+        f"ON CONFLICT(id) DO UPDATE SET {', '.join(f'{c} = excluded.{c}' for c in columnas[1:])}",
         (v["id"], v["fecha"], v["sesion"], v["numero"], v["tipo"], subtipo, int(es_conv),
          v["expediente"], v["texto_subgrupo"], clave_iniciativa(v["expediente"]),
          compute_resultado(v["a_favor"], v["en_contra"]), v["a_favor"], v["en_contra"], v["abstenciones"],

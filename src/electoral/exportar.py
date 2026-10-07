@@ -19,6 +19,7 @@ def _votaciones(conn) -> list[dict]:
             "resultado": v["resultado"], "a_favor": v["a_favor"], "en_contra": v["en_contra"],
             "abstenciones": v["abstenciones"], "excluida_tramite": bool(v["excluida_tramite"]),
             "votos": votos, "url_xml": v["url_xml"], "url_sesion": v["url_sesion"],
+            "url_bocg": v["url_bocg"], "url_boe": v["url_boe"],
         })
     return salida
 
