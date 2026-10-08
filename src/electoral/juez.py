@@ -136,6 +136,13 @@ def huella(cands) -> str:
     return hashlib.sha1(base.encode("utf-8")).hexdigest()
 
 
+def conjunto(conn, k) -> str:
+    """Huella de las promesas que pueden ser candidatas (y de k). Si cambia, los candidatos se recalculan."""
+    ids = [r[0] for r in conn.execute("SELECT id FROM promesas WHERE procedimental = 0 AND embedding IS NOT NULL "
+                                      "AND anio = 2023 ORDER BY id")]
+    return hashlib.sha1(json.dumps([ids, k]).encode("utf-8")).hexdigest()
+
+
 def juzgar(conn, llm, k=20) -> int:
     """Juzga lo pendiente. Devuelve cuántos expedientes ha cerrado. No juzga si quedan bloques sin extraer."""
     pendientes = conn.execute("SELECT COUNT(*) FROM bloques WHERE extraido = 0").fetchone()[0]
@@ -143,10 +150,23 @@ def juzgar(conn, llm, k=20) -> int:
         print(f"Quedan {pendientes} bloques de programa sin extraer: no se juzga hasta completarlos (extraer).")
         return 0
     asegurar_embeddings(conn)
-    hechas = {r[0]: r[1] for r in conn.execute("SELECT votacion_id, respuestas FROM juicios WHERE completo = 1")}
+    previos = conn.execute("SELECT * FROM juicios WHERE completo = 1").fetchall()
+    hechas = {r["votacion_id"]: r["respuestas"] for r in previos}
     # El texto alternativo no se juzga: votar un texto que sustituye al original no es una postura sobre la ley.
     todas = conn.execute("SELECT * FROM votaciones WHERE excluida_tramite = 0 AND subtipo != 'texto_alternativo'").fetchall()
-    cands = candidatos(conn, todas, k)
+    # Los candidatos de lo ya juzgado se reutilizan mientras no cambien las promesas: la normalización depende de
+    # todas las votaciones y los vectores varían algo entre máquinas, y eso no puede reabrir juicios cerrados.
+    base = conjunto(conn, k)
+    P = {p["id"]: p for p in conn.execute("SELECT id, partido, texto FROM promesas")}
+    cands = {}
+    for r in previos:
+        ids = json.loads(r["candidatos"]) if r["candidatos"] else None
+        if ids is not None and r["promesas"] == base and all(i in P for i in ids):
+            cands[r["votacion_id"]] = [P[i] for i in ids]
+    sin_fijar = [v for v in todas if v["id"] not in cands]
+    if sin_fijar:
+        nuevos = candidatos(conn, todas, k)
+        cands.update({v["id"]: nuevos.get(v["id"], []) for v in sin_fijar})
     # La conexión SQLite no se comparte entre hilos: todo lo que se lee de la base se lee aquí, antes.
     votos_de = {v["id"]: conn.execute("SELECT * FROM votos_partido WHERE votacion_id = ? ORDER BY partido",
                                       (v["id"],)).fetchall() for v in todas}
@@ -180,7 +200,9 @@ def juzgar(conn, llm, k=20) -> int:
                 if res:
                     conn.execute("INSERT INTO cruces VALUES (?,?,?,?,?,?)", (v["id"], promesa_id, partido, res[0], res[1], json.dumps(
                         {m: ({"postura": r[0], "fuerza": r[1]} if r else None) for m, r in respuestas.items()}, ensure_ascii=False)))
-            conn.execute("INSERT OR REPLACE INTO juicios VALUES (?, 1, ?)", (v["id"], huellas[v["id"]]))
+            conn.execute("INSERT OR REPLACE INTO juicios (votacion_id, completo, respuestas, candidatos, promesas) "
+                         "VALUES (?, 1, ?, ?, ?)", (v["id"], huellas[v["id"]],
+                                                    json.dumps([p["id"] for p in cands.get(v["id"], [])]), base))
             conn.commit()
             cerrados += 1
     return cerrados
