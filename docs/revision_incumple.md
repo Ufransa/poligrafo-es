@@ -13,8 +13,8 @@ Lo que no marques sale en la web como «juzga tú», con las mismas pruebas.
 - **Texto de la iniciativa (BOCG):** https://www.congreso.es/public_oficiales/L15/CONG/BOCG/A/BOCG-15-A-7-1.PDF
 - **Sesión:** https://www.congreso.es/es/opendata/votaciones?p_p_id=votaciones&p_p_lifecycle=0&p_p_state=normal&p_p_mode=view&targetLegislatura=XV&targetDate=20/03/2025
 
-- [ ] Confirmo «incumple»
-- Nota: 
+- [x] Confirmo «incumple»
+- Nota:
 
 ## 2. Junts: INCUMPLE (lo doy por correcto)
 
@@ -25,8 +25,8 @@ Lo que no marques sale en la web como «juzga tú», con las mismas pruebas.
 - **Programa:** https://img.beteve.cat/wp-content/uploads/2023/07/programa-junts-per-catalunya-eleccions-generals-2023.pdf#page=99
 - **Sesión:** https://www.congreso.es/es/opendata/votaciones?p_p_id=votaciones&p_p_lifecycle=0&p_p_state=normal&p_p_mode=view&targetLegislatura=XV&targetDate=17/02/2026
 
-- [ ] Confirmo «incumple»
-- Nota: 
+- [x] Confirmo «incumple»
+- Nota:
 
 ## 3. PP: INCUMPLE (lo doy por correcto)
 
@@ -37,8 +37,8 @@ Lo que no marques sale en la web como «juzga tú», con las mismas pruebas.
 - **Programa:** https://www.pp.es/storage/2023/07/programa_electoral_pp_23j_feijoo_2023.pdf#page=71
 - **Sesión:** https://www.congreso.es/es/opendata/votaciones?p_p_id=votaciones&p_p_lifecycle=0&p_p_state=normal&p_p_mode=view&targetLegislatura=XV&targetDate=27/02/2024
 
-- [ ] Confirmo «incumple»
-- Nota: 
+- [x] Confirmo «incumple»
+- Nota:
 
 ## 4. Junts: INCUMPLE (lo doy por correcto)
 
@@ -50,8 +50,8 @@ Lo que no marques sale en la web como «juzga tú», con las mismas pruebas.
 - **Texto de la iniciativa (BOCG):** https://www.congreso.es/public_oficiales/L15/CONG/BOCG/A/BOCG-15-A-45-1.PDF
 - **Sesión:** https://www.congreso.es/es/opendata/votaciones?p_p_id=votaciones&p_p_lifecycle=0&p_p_state=normal&p_p_mode=view&targetLegislatura=XV&targetDate=22/01/2025
 
-- [ ] Confirmo «incumple»
-- Nota: 
+- [x] Confirmo «incumple»
+- Nota:
 
 ## 5. PP: INCUMPLE (dudoso)
 
@@ -62,8 +62,8 @@ Lo que no marques sale en la web como «juzga tú», con las mismas pruebas.
 - **Programa:** https://www.pp.es/storage/2023/07/programa_electoral_pp_23j_feijoo_2023.pdf#page=104
 - **Sesión:** https://www.congreso.es/es/opendata/votaciones?p_p_id=votaciones&p_p_lifecycle=0&p_p_state=normal&p_p_mode=view&targetLegislatura=XV&targetDate=10/09/2025
 
-- [ ] Confirmo «incumple»
-- Nota: 
+- [x] Confirmo «incumple»
+- Nota:
 
 ## 6. PSOE: INCUMPLE (dudoso)
 
@@ -74,5 +74,5 @@ Lo que no marques sale en la web como «juzga tú», con las mismas pruebas.
 - **Programa:** https://www.elnacional.cat/uploads/s1/42/65/82/06/programa-electoral-psoe-eleccions-generals-2023-pedro-sanchez.pdf#page=260
 - **Sesión:** https://www.congreso.es/es/opendata/votaciones?p_p_id=votaciones&p_p_lifecycle=0&p_p_state=normal&p_p_mode=view&targetLegislatura=XV&targetDate=30/09/2026
 
-- [ ] Confirmo «incumple»
-- Nota: 
+- [x] Confirmo «incumple»
+- Nota:

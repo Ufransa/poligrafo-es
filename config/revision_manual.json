@@ -1,3 +1,52 @@
 {
- "confirmados": []
+ "confirmados": [
+  {
+   "votacion_id": "101-19",
+   "promesa_id": 176,
+   "partido": "PP",
+   "veredicto": "incumple",
+   "revisado_por": "Fran",
+   "fecha": "2026-10-08"
+  },
+  {
+   "votacion_id": "160-1",
+   "promesa_id": 4716,
+   "partido": "Junts",
+   "veredicto": "incumple",
+   "revisado_por": "Fran",
+   "fecha": "2026-10-08"
+  },
+  {
+   "votacion_id": "24-1",
+   "promesa_id": 281,
+   "partido": "PP",
+   "veredicto": "incumple",
+   "revisado_por": "Fran",
+   "fecha": "2026-10-08"
+  },
+  {
+   "votacion_id": "89-3",
+   "promesa_id": 4729,
+   "partido": "Junts",
+   "veredicto": "incumple",
+   "revisado_por": "Fran",
+   "fecha": "2026-10-08"
+  },
+  {
+   "votacion_id": "130-6",
+   "promesa_id": 404,
+   "partido": "PP",
+   "veredicto": "incumple",
+   "revisado_por": "Fran",
+   "fecha": "2026-10-08"
+  },
+  {
+   "votacion_id": "202-1",
+   "promesa_id": 5564,
+   "partido": "PSOE",
+   "veredicto": "incumple",
+   "revisado_por": "Fran",
+   "fecha": "2026-10-08"
+  }
+ ]
 }
