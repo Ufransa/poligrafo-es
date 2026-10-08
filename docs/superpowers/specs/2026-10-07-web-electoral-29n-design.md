@@ -137,9 +137,14 @@ más promesas en ese programa. El reparto por temas (en %) se muestra para 2023 
 Tres pantallas, móvil primero, sin jerga:
 
 1. **Portada, «Los partidos».** Fichas ordenadas por escaños (sin escaño: al final, en orden alfabético). En cada
-   una: veredictos, cuántos cumple e incumple, y coherencia. Arriba: *«Aquí no te decimos a quién votar. Te
-   enseñamos lo que prometieron y lo que votaron.»*
-2. **Ficha de partido.** Promesas principales con su estado; promesa → votación → voto con cita y enlace oficial;
+   una: escaños de 2023 y los tres temas a los que dedica más espacio su programa (o el motivo de que no haya
+   programa). **Sin cifras de cumple o incumple** (decisión de Fran, 2026-10-08): quien gobierna acumula
+   «cumple» votando sus propias leyes y los «incumple» exigen revisión a mano, así que puestas lado a lado
+   se leerían como un ranking. Arriba: *«Aquí no te decimos a quién votar. Te enseñamos lo que prometieron y lo
+   que votaron.»*
+2. **Ficha de partido.** Cruces con veredicto firme **agrupados por tema**, con los temas en el orden del espacio que
+   les dedica su programa (decisión de Fran, 2026-10-08: el orden lo pone el partido, nadie elige promesas). Cada
+   «incumple» firme lleva «Revisado a mano». Promesa → votación → voto con cita y enlace oficial;
    «A qué dedica su programa» (temas en %, 2023 y 2026); coherencia; «Lo que hicieron gobernando» (solo PSOE y
    Sumar, en una sección aparte); dinero; «Juzga tú» plegado por defecto.
 3. **«Sobre este proyecto».** Página de transparencia, escrita en lenguaje llano:
@@ -193,6 +198,10 @@ Se descarta Angular con prerenderizado: más JavaScript y más superficie de man
   sin su aprobación no se publica nada.
 - **Orange Pi, cada noche:** votaciones nuevas → `datos.json` → push a `poligrafo-web` → Cloudflare Pages.
 - **ARGUS:** vigila que `datos.json` se haya regenerado en menos de 48 horas.
+- **Revisión de «incumple»:** un «incumple» solo es veredicto si Fran lo confirma (`config/revision_manual.json`).
+  Cada noche, los nuevos candidatos se le avisan por Telegram (canal privado de PolígrafoES).
+- **Dirección:** `poligrafo-29n.pages.dev` (cuenta de Cloudflare de Fran).
+- **Firma:** Francisco Segura Cruz.
 - **Gasto:** tope por ejecución en el código, más el límite de la clave en OpenRouter. Estimación de la carga
   completa: unos 3,5 $. Gastado en las pruebas: 1,06 $. **Subir el límite de la clave de 5 $ a unos 10 $.**
 
