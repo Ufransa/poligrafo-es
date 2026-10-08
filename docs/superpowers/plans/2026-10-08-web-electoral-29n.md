@@ -258,7 +258,7 @@ Expected: FAIL (el build no tiene páginas ni `robots.txt`; el servidor no arran
 `src/lib/config.ts`:
 
 ```ts
-export const FIRMA = 'Fran';
+export const FIRMA = 'Francisco Segura Cruz';
 export const REPO_MOTOR = 'https://github.com/Ufransa/poligrafo-es';
 export const REPO_WEB = 'https://github.com/Ufransa/poligrafo-web';
 ```
@@ -444,7 +444,7 @@ import Base from '../layouts/Base.astro';
 <Base titulo="Los partidos"><h1>Los partidos</h1></Base>
 ```
 
-`LICENSE`: MIT, `Copyright (c) 2026 Ufransa` (mismo texto que el del motor).
+`LICENSE`: MIT, `Copyright (c) 2026 Francisco Segura Cruz` (mismo texto que el del motor).
 
 `README.md`:
 
