@@ -1,0 +1,16 @@
+{
+  "grupos": {"GP": "PP", "GS": "PSOE", "GSUMAR": "Sumar", "GVOX": "Vox", "GR": "ERC", "GJxCAT": "Junts", "GEH Bildu": "EH Bildu", "GV (EAJ-PNV)": "PNV"},
+  "mixto": [
+    {"diputado": "Belarra Urteaga, Ione", "partido": "Podemos", "desde": "2023-12-12"},
+    {"diputado": "Santana Perera, Noemí", "partido": "Podemos", "desde": "2023-12-12"},
+    {"diputado": "Sánchez Serna, Javier", "partido": "Podemos", "desde": "2023-12-12"},
+    {"diputado": "Velarde Gómez, Martina", "partido": "Podemos", "desde": "2023-12-12"},
+    {"diputado": "Verstrynge Revuelta, Lilith", "partido": "Podemos", "desde": "2023-12-12"},
+    {"diputado": "Catalán Higueras, Alberto", "partido": "UPN", "desde": "2023-08-17"},
+    {"diputado": "Rego Candamil, Néstor", "partido": "BNG", "desde": "2023-08-17"},
+    {"diputado": "Valido García, Cristina", "partido": "CC", "desde": "2023-08-17"},
+    {"diputado": "Micó Micó, Àgueda", "partido": "Compromís", "desde": "2025-07-08"},
+    {"diputado": "Ábalos Meco, José Luis", "partido": null, "desde": "2024-02-27", "motivo": "independiente tras salir del PSOE"},
+    {"diputado": "Ortega Smith-Molina, Francisco Javier", "partido": null, "desde": "2026-07-23", "motivo": "independiente tras salir de Vox"}
+  ]
+}

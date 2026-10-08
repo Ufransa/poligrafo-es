@@ -1,0 +1,123 @@
+[
+  {
+    "id": "PP",
+    "nombre": "Partido Popular",
+    "escanos_23j": 137,
+    "gobierno": [],
+    "programa_2023": "https://www.pp.es/storage/2023/07/programa_electoral_pp_23j_feijoo_2023.pdf"
+  },
+  {
+    "id": "PSOE",
+    "nombre": "Partido Socialista Obrero Español",
+    "escanos_23j": 121,
+    "gobierno": [
+      [
+        "2023-08-17",
+        null
+      ]
+    ],
+    "programa_2023": "https://www.elnacional.cat/uploads/s1/42/65/82/06/programa-electoral-psoe-eleccions-generals-2023-pedro-sanchez.pdf",
+    "nota_gobierno": "En funciones del 17-08-2023 al 21-11-2023; después, Gobierno de coalición con Sumar."
+  },
+  {
+    "id": "Vox",
+    "nombre": "Vox",
+    "escanos_23j": 33,
+    "gobierno": [],
+    "programa_2023": "https://files.mediaset.es/file/2023/0707/15/programa-vox-completo-pdf.pdf"
+  },
+  {
+    "id": "Sumar",
+    "nombre": "Sumar",
+    "escanos_23j": 31,
+    "gobierno": [
+      [
+        "2023-08-17",
+        null
+      ]
+    ],
+    "programa_2023": "https://www.newtral.es/wp-content/uploads/2023/07/Programa_electoral_sumar_23j_2023.pdf",
+    "nota_gobierno": "Yolanda Díaz fue ministra en el Gobierno en funciones (17-08 al 21-11-2023) y en la coalición posterior."
+  },
+  {
+    "id": "ERC",
+    "nombre": "Esquerra Republicana",
+    "escanos_23j": 7,
+    "gobierno": [],
+    "programa_2023": "https://defensacatalunya.esquerrarepublicana.cat/documents/e2023-programa.pdf"
+  },
+  {
+    "id": "Junts",
+    "nombre": "Junts per Catalunya",
+    "escanos_23j": 7,
+    "gobierno": [],
+    "programa_2023": "https://img.beteve.cat/wp-content/uploads/2023/07/programa-junts-per-catalunya-eleccions-generals-2023.pdf"
+  },
+  {
+    "id": "EH Bildu",
+    "nombre": "EH Bildu",
+    "escanos_23j": 6,
+    "gobierno": [],
+    "programa_2023": "https://www.elnacional.cat/uploads/s1/42/81/42/33/programa-electoral-eh-bildu-eleccions-generals-2023.pdf"
+  },
+  {
+    "id": "PNV",
+    "nombre": "EAJ-PNV",
+    "escanos_23j": 5,
+    "gobierno": [],
+    "programa_2023": "https://www.eaj-pnv.eus/es/adjuntos-documentos/20945/pdf/con-voz-propia-programa-electoral-23-j"
+  },
+  {
+    "id": "BNG",
+    "nombre": "Bloque Nacionalista Galego",
+    "escanos_23j": 1,
+    "gobierno": [],
+    "programa_2023": "https://www.bng.gal/media/bnggaliza/files/2023/07/05/23_bng_xerais_programa.pdf"
+  },
+  {
+    "id": "CC",
+    "nombre": "Coalición Canaria",
+    "escanos_23j": 1,
+    "gobierno": [],
+    "programa_2023": null,
+    "sin_programa": "No hemos localizado un programa propio de Coalición Canaria para las generales de 2023: su web oficial (apartado Documentos, consultado el 2026-10-07) publica el de 2016 y el acuerdo de legislatura con el PSOE, pero no un programa de 2023."
+  },
+  {
+    "id": "UPN",
+    "nombre": "Unión del Pueblo Navarro",
+    "escanos_23j": 1,
+    "gobierno": [],
+    "programa_2023": null,
+    "sin_programa": "No hemos localizado un programa propio de UPN para las generales de 2023: el que publica es el de las autonómicas y municipales de mayo de 2023 (consultado el 2026-10-07)."
+  },
+  {
+    "id": "Podemos",
+    "nombre": "Podemos",
+    "escanos_23j": 0,
+    "gobierno": [
+      [
+        "2023-08-17",
+        "2023-11-21"
+      ]
+    ],
+    "programa_2023": null,
+    "sin_programa": "En 2023 se presentó dentro de Sumar: sus promesas de 2023 son las de Sumar.",
+    "nota_gobierno": "Solo en el Gobierno en funciones (Belarra y Montero, ministras hasta el 21-11-2023); no entró en el Gobierno de coalición."
+  },
+  {
+    "id": "Compromís",
+    "nombre": "Compromís",
+    "escanos_23j": 0,
+    "gobierno": [],
+    "programa_2023": null,
+    "sin_programa": "En 2023 se presentó dentro de Sumar: sus promesas de 2023 son las de Sumar."
+  },
+  {
+    "id": "SALF",
+    "nombre": "Se Acabó La Fiesta",
+    "escanos_23j": 0,
+    "gobierno": [],
+    "programa_2023": null,
+    "sin_programa": "No existía en 2023."
+  }
+]

@@ -7,3 +7,4 @@ anthropic
 pydantic
 sentence-transformers
 numpy
+jsonschema

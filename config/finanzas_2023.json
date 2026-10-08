@@ -1,0 +1,85 @@
+{
+ "url_informe_campana": "https://www.juntaelectoralcentral.es/cs/jec/documentos/GENERALES_2023_TCuentas_Resoluci%C3%B3n.pdf",
+ "informe": "Tribunal de Cuentas, Informe 1.616 de fiscalización de las contabilidades de las elecciones a Cortes Generales del 23 de julio de 2023 (aprobado el 27/03/2025)",
+ "notas": "gasto_justificado_eur = gastos ordinarios justificados + gastos por envíos justificados. El informe no publica el importe de la subvención, solo si el Tribunal propone reducirla. La transparencia (informe 2023-2024) queda pendiente de transcribir.",
+ "partidos": {
+  "BNG": {
+   "gasto_justificado_eur": 667520.05,
+   "endeudamiento_eur": 0.0,
+   "propuesta_reduccion_subvencion": false,
+   "pagina": 21,
+   "transparencia": "sin_dato"
+  },
+  "CC": {
+   "gasto_justificado_eur": 424621.16,
+   "endeudamiento_eur": 0.0,
+   "propuesta_reduccion_subvencion": false,
+   "pagina": 23,
+   "transparencia": "sin_dato"
+  },
+  "ERC": {
+   "gasto_justificado_eur": 989379.51,
+   "endeudamiento_eur": 490074.67,
+   "propuesta_reduccion_subvencion": true,
+   "pagina": 25,
+   "transparencia": "sin_dato"
+  },
+  "EH Bildu": {
+   "gasto_justificado_eur": 805055.83,
+   "endeudamiento_eur": 0.0,
+   "propuesta_reduccion_subvencion": false,
+   "pagina": 27,
+   "transparencia": "sin_dato"
+  },
+  "PNV": {
+   "gasto_justificado_eur": 1258920.44,
+   "endeudamiento_eur": 0.0,
+   "propuesta_reduccion_subvencion": false,
+   "pagina": 29,
+   "transparencia": "sin_dato"
+  },
+  "Junts": {
+   "gasto_justificado_eur": 2099577.66,
+   "endeudamiento_eur": 469601.0,
+   "propuesta_reduccion_subvencion": true,
+   "pagina": 33,
+   "transparencia": "sin_dato"
+  },
+  "PP": {
+   "gasto_justificado_eur": 18131327.44,
+   "endeudamiento_eur": 12375100.0,
+   "propuesta_reduccion_subvencion": false,
+   "pagina": 35,
+   "transparencia": "sin_dato"
+  },
+  "PSOE": {
+   "gasto_justificado_eur": 18947309.14,
+   "endeudamiento_eur": 13402071.1,
+   "propuesta_reduccion_subvencion": true,
+   "pagina": 38,
+   "transparencia": "sin_dato",
+   "nota": "Suma del PSOE (pág. 38) y del PSC-PSOE (pág. 40), que el Tribunal fiscaliza por separado."
+  },
+  "Sumar": {
+   "gasto_justificado_eur": 5192283.49,
+   "endeudamiento_eur": 2967085.6,
+   "propuesta_reduccion_subvencion": true,
+   "pagina": 42,
+   "transparencia": "sin_dato"
+  },
+  "UPN": {
+   "gasto_justificado_eur": 267789.88,
+   "endeudamiento_eur": 0.0,
+   "propuesta_reduccion_subvencion": true,
+   "pagina": 45,
+   "transparencia": "sin_dato"
+  },
+  "Vox": {
+   "gasto_justificado_eur": 8103443.68,
+   "endeudamiento_eur": 6000000.0,
+   "propuesta_reduccion_subvencion": true,
+   "pagina": 47,
+   "transparencia": "sin_dato"
+  }
+ }
+}
