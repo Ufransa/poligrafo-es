@@ -33,6 +33,10 @@ CREATE TABLE IF NOT EXISTS cruces (
     PRIMARY KEY (votacion_id, promesa_id)
 );
 CREATE TABLE IF NOT EXISTS gasto (id INTEGER PRIMARY KEY, fecha TEXT, paso TEXT, usd REAL);
+CREATE TABLE IF NOT EXISTS avisos (
+    votacion_id TEXT, promesa_id INTEGER, partido TEXT, fecha TEXT,
+    PRIMARY KEY (votacion_id, promesa_id, partido)
+);
 """
 
 
