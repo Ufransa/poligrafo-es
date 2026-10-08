@@ -82,3 +82,19 @@ def test_un_incumple_por_revisar_va_marcado_en_el_contrato(cli, zips):
     pendientes = [c for c in cruces if c["pendiente_revision"]]
     assert pendientes and all(c["nivel"] == "juzga_tu" and c["veredicto"] == "incumple" for c in pendientes)
     assert all(not c["pendiente_revision"] for c in cruces if c["veredicto"] == "cumple")
+
+
+def test_si_la_web_recibe_cambios_de_codigo_la_noche_sigue_publicando(tmp_path, zips):
+    """Un push de código a poligrafo-web desde el PC deja atrás el clon de la Pi: no puede bloquear la publicación."""
+    remoto, clon = _web(tmp_path)
+    otro = tmp_path / "pc"
+    _git("clone", str(remoto), str(otro), cwd=tmp_path)
+    _git("config", "user.email", "t@t", cwd=otro)
+    _git("config", "user.name", "t", cwd=otro)
+    (otro / "README.md").write_text("web con cambios", encoding="utf-8")
+    _git("commit", "-am", "cambio de codigo", cwd=otro)
+    _git("push", "origin", "main", cwd=otro)
+    r = _noche(tmp_path, zips, clon, tmp_path / "avisos.jsonl")
+    assert r.returncode == 0, r.stderr
+    assert _git("show", "main:README.md", cwd=remoto) == "web con cambios"
+    assert json.loads(_git("show", "main:data/datos.json", cwd=remoto))["meta"]

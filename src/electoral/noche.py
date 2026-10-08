@@ -41,14 +41,15 @@ def avisar(conn, datos: dict) -> int:
 
 
 def publicar(datos_json: Path, web: Path) -> None:
-    """Copia datos.json al clon de poligrafo-web y hace push. Nunca fuerza: si el remoto cambió, falla."""
-    destino = web / "data" / "datos.json"
-    destino.parent.mkdir(exist_ok=True)
-    shutil.copyfile(datos_json, destino)
-
+    """Copia datos.json al clon de poligrafo-web y hace push. Nunca fuerza: si no puede integrar el remoto, falla."""
     def git(*a):
         return subprocess.run(["git", *a], cwd=web, capture_output=True, text=True, check=True)
 
+    # Los cambios de código de la web se suben desde el PC: el clon de la Pi los trae antes de publicar.
+    git("pull", "--rebase", "origin", "HEAD")
+    destino = web / "data" / "datos.json"
+    destino.parent.mkdir(exist_ok=True)
+    shutil.copyfile(datos_json, destino)
     git("add", "data/datos.json")
     if subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=web).returncode != 0:
         git("commit", "-m", f"datos: {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC")
