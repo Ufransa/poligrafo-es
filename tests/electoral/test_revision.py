@@ -223,3 +223,39 @@ def test_una_votacion_que_pasa_a_excluida_deja_de_publicar_sus_cruces(cli, tmp_p
     assert cli("exportar")["cruces"], "sin cruces la prueba no mide nada"
     cli("descargar", "--zips", _zip_sintetico(tmp_path / "b", [(ley + "\nVotación de la enmienda.", "No", 190, 150)]))
     assert cli("exportar")["cruces"] == []
+
+
+def test_las_votaciones_nuevas_no_hacen_rejuzgar_las_ya_juzgadas(cli, zips, tmp_path):
+    """La normalización de candidatos depende de todas las votaciones: una nueva movía los candidatos de las
+    antiguas y las rejuzgaba (y en la Orange Pi, con otros embeddings, rejuzgaba la legislatura entera)."""
+    import shutil
+    import sqlite3
+    primeras = tmp_path / "primeras"
+    primeras.mkdir()
+    for z in sorted(Path(zips).glob("*.zip"))[:4]:
+        shutil.copy(z, primeras)
+    _preparar(cli, str(primeras), LLM_FALSO_TODOS="1")
+    cli("juzgar", "--k", "3", env=_env(LLM_FALSO_TODOS="1"))
+    cuenta = lambda: sqlite3.connect(cli.db).execute(
+        "SELECT COUNT(*) FROM votaciones WHERE excluida_tramite = 0 AND subtipo != 'texto_alternativo'").fetchone()[0]
+    antes = cuenta()
+    cli("descargar", "--zips", zips)
+    nuevas = cuenta() - antes
+    assert nuevas > 0
+    salida = cli("juzgar", "--k", "3", env=_env(LLM_FALSO_TODOS="1"))
+    assert salida.startswith(f"{nuevas} expedientes"), salida
+
+
+def test_otra_maquina_con_embeddings_algo_distintos_no_rejuzga_nada(cli, zips):
+    """En la Orange Pi los vectores no salen idénticos a los del PC: lo ya juzgado tiene que seguir valiendo."""
+    import sqlite3
+    _preparar(cli, zips, LLM_FALSO_TODOS="1")
+    cli("juzgar", "--k", "1", env=_env(LLM_FALSO_TODOS="1"))
+    conn = sqlite3.connect(cli.db)
+    filas = conn.execute("SELECT id, embedding FROM promesas WHERE embedding IS NOT NULL ORDER BY id").fetchall()
+    assert len(filas) > 1
+    rotadas = [f[1] for f in filas[1:]] + [filas[0][1]]          # cada promesa recibe el vector de la siguiente
+    conn.executemany("UPDATE promesas SET embedding = ? WHERE id = ?", [(e, f[0]) for e, f in zip(rotadas, filas)])
+    conn.commit()
+    conn.close()
+    assert cli("juzgar", "--k", "1", env=_env(LLM_FALSO_TODOS="1")).startswith("0 expedientes")

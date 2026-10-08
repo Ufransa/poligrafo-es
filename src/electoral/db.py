@@ -49,5 +49,10 @@ def conectar(ruta: Path) -> sqlite3.Connection:
             conn.execute(f"ALTER TABLE votaciones ADD COLUMN {col} TEXT")
         except sqlite3.OperationalError:
             pass
+    for col in ("candidatos", "promesas"):        # candidatos fijados al juzgar y el conjunto de promesas de entonces
+        try:
+            conn.execute(f"ALTER TABLE juicios ADD COLUMN {col} TEXT")
+        except sqlite3.OperationalError:
+            pass
     conn.execute("CREATE TABLE IF NOT EXISTS boe (clave TEXT PRIMARY KEY, identificador TEXT)")
     return conn
