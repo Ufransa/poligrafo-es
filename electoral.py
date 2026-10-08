@@ -7,7 +7,7 @@ from pathlib import Path
 from src.electoral import db as edb
 import json
 
-from src.electoral import exportar, fuentes, juez, programas, votaciones
+from src.electoral import exportar, fuentes, juez, noche, programas, votaciones
 from src.electoral.llm import LLM
 
 RAIZ = Path(__file__).resolve().parent
@@ -92,6 +92,25 @@ def cmd_todo(a, conn):
         main([paso, *args, "--db", a.db])
 
 
+def cmd_noche(a, conn):
+    """Pasos del motor y, al final, aviso y publicación. La salud se escribe siempre, también si algo falla."""
+    avisos, error = 0, None
+    try:
+        main(["descargar", *(["--zips", a.zips] if a.zips else []), "--db", a.db])
+        main(["fuentes", *(["--iniciativas", a.iniciativas] if a.iniciativas else []),
+              *(["--boe", a.boe] if a.boe else []), "--db", a.db])
+        main(["juzgar", "--tope", str(a.tope), "--db", a.db])
+        main(["exportar", "--salida", a.salida, "--db", a.db])
+        datos = json.loads(Path(a.salida).read_text(encoding="utf-8"))
+        avisos = noche.avisar(conn, datos)
+        noche.publicar(Path(a.salida), Path(a.web))
+    except Exception as e:                       # la salud lo cuenta y ARGUS avisa
+        error = f"{type(e).__name__}: {getattr(e, 'stderr', '') or e}"[:500]
+    noche.escribir_salud(Path(a.salud), error is None, avisos, error)
+    if error:
+        raise SystemExit(f"noche: {error}")
+
+
 def cmd_exportar(a, conn):
     exportar.escribir(exportar.construir(conn, RAIZ, Path(a.revision) if a.revision else None), Path(a.salida))
 
@@ -99,7 +118,7 @@ def cmd_exportar(a, conn):
 def main(argv=None):
     p = argparse.ArgumentParser(prog="electoral")
     sub = p.add_subparsers(dest="cmd", required=True)
-    for nombre in ("descargar", "fuentes", "ingest-programa", "extraer", "juzgar", "exportar", "muestra", "todo"):
+    for nombre in ("descargar", "fuentes", "ingest-programa", "extraer", "juzgar", "exportar", "muestra", "todo", "noche"):
         s = sub.add_parser(nombre)
         s.add_argument("--db", default=str(RAIZ / "electoral.db"))
     for arg in ("anio", "partido", "origen"):
@@ -116,11 +135,18 @@ def main(argv=None):
     sub.choices["fuentes"].add_argument("--boe", help="JSON clave -> identificador BOE (por defecto, API del BOE)")
     sub.choices["descargar"].add_argument("--zips", help="carpeta con ZIPs ya bajados (no descarga nada)")
     sub.choices["exportar"].add_argument("--salida", default=str(RAIZ / "datos.json"))
+    sub.choices["noche"].add_argument("--web", required=True, help="clon local de poligrafo-web")
+    sub.choices["noche"].add_argument("--zips", help="carpeta con ZIPs ya bajados (pruebas)")
+    sub.choices["noche"].add_argument("--iniciativas")
+    sub.choices["noche"].add_argument("--boe")
+    sub.choices["noche"].add_argument("--tope", type=float, default=0.3)
+    sub.choices["noche"].add_argument("--salida", default=str(RAIZ / "datos.json"))
+    sub.choices["noche"].add_argument("--salud", default=str(RAIZ / "electoral_data" / "noche.json"))
     sub.choices["exportar"].add_argument("--revision", help="JSON con los cruces confirmados a mano (por defecto, config/revision_manual.json)")
     a = p.parse_args(argv)
     conn = edb.conectar(Path(a.db))
     {"descargar": cmd_descargar, "ingest-programa": cmd_ingest, "extraer": cmd_extraer, "juzgar": cmd_juzgar, "fuentes": cmd_fuentes, "muestra": cmd_muestra, "todo": cmd_todo,
-     "exportar": cmd_exportar}[a.cmd](a, conn)
+     "exportar": cmd_exportar, "noche": cmd_noche}[a.cmd](a, conn)
 
 
 if __name__ == "__main__":

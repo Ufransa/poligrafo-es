@@ -8,7 +8,7 @@ from pathlib import Path
 
 from src.electoral import analisis
 
-VERSION_CONTRATO = "1.0.0"
+VERSION_CONTRATO = "1.1.0"
 
 
 def _votaciones(conn) -> list[dict]:
@@ -68,11 +68,13 @@ def _cruces(conn, confirmados: set) -> list[dict]:
         clave = (c["votacion_id"], c["promesa_id"], c["partido"], res[1])
         revisado = clave in confirmados
         # Un incumple solo se afirma revisado a mano: el juez ve el titulo, no el contenido de la iniciativa.
-        if res == ("veredicto", "incumple") and not revisado:
+        pendiente = res == ("veredicto", "incumple") and not revisado
+        if pendiente:
             res = ("juzga_tu", "incumple")
         salida.append({"votacion_id": c["votacion_id"], "promesa_id": c["promesa_id"], "partido": c["partido"],
                        "voto": c["voto"], "dividido": bool(c["dividido"]), "nivel": res[0],
-                       "veredicto": res[1], "revisado_a_mano": revisado and res[0] == "veredicto", "jueces": jueces})
+                       "veredicto": res[1], "revisado_a_mano": revisado and res[0] == "veredicto", "pendiente_revision": pendiente,
+                       "jueces": jueces})
     return salida
 
 

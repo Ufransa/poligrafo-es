@@ -142,6 +142,7 @@
           "nivel",
           "veredicto",
           "revisado_a_mano",
+          "pendiente_revision",
           "jueces"
         ],
         "properties": {
@@ -158,6 +159,9 @@
             ]
           },
           "revisado_a_mano": {
+            "type": "boolean"
+          },
+          "pendiente_revision": {
             "type": "boolean"
           },
           "jueces": {
