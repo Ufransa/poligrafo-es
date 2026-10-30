@@ -57,6 +57,31 @@ completa genera una muestra de 30 veredictos al azar que se revisa antes de publ
 - **Partidos sin programa propio en 2023** (Podemos y Compromís iban dentro de Sumar; SALF no existía; no se ha
   localizado el de CC ni el de UPN): se muestran sus votos, pero no promesas que no fueron suyas.
 
+### Test a ciegas
+
+Propuestas de los programas de 2026 resumidas sin delatar al partido, con sus condiciones jurídicas, para votarlas
+sí/no en la página `/test` de la web y ver al final de quién eran. Diseño:
+`docs/superpowers/specs/2026-10-30-test-a-ciegas-design.md`.
+
+- `test-seleccionar`: hasta 3 propuestas por partido y tema (por defecto, los 6 temas del lanzamiento).
+- `test-resumir`: resumen neutral y las materias jurídicas que toca; las condiciones (mayoría, UE, competencias,
+  coste) salen siempre de `config/condiciones.json`, escrita a mano, nunca del modelo.
+- `test-neutralidad`: otro modelo intenta adivinar el partido; solo se reescribe lo que se delata por la forma.
+- `test-revision` → `docs/revision_test_<año>.md`; `test-aprobar` → `config/test_ciegas.json` (solo lo marcado
+  «Publicar»). `exportar` lo publica como clave `test` (contrato 1.2.0).
+
+**Guion del día de los programas (13-11):**
+
+1. En la Pi, por cada partido: `python3 electoral.py ingest-programa 2026 <partido> <url>`; después
+   `python3 electoral.py extraer --tope 1`.
+2. Comprobar que no queda ningún bloque sin extraer (si queda, la noche deja de juzgar):
+   `python3 -c "import sqlite3; print(sqlite3.connect('electoral.db').execute('SELECT COUNT(*) FROM bloques WHERE extraido = 0').fetchone()[0])"` → `0`.
+3. Traer la base al PC (`electoral_data/` está fuera de git) y, con `--db` apuntando a esa copia:
+   `test-seleccionar --anio 2026`, `test-resumir --anio 2026`, `test-neutralidad --anio 2026`, `test-revision --anio 2026`.
+4. Revisar `docs/revision_test_2026.md`; `test-aprobar --anio 2026 --revision docs/revision_test_2026.md`;
+   commit de `config/test_ciegas.json`, push y `git pull` en la Pi. La noche lo publica.
+5. Un programa que llegue más tarde: repetir los pasos para ese partido. Lo ya seleccionado no se repite.
+
 ## Pruebas
 
 ```bash
