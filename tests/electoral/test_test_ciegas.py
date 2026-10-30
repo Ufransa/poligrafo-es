@@ -322,3 +322,19 @@ def test_un_partido_desconocido_hace_fallar_la_exportacion(cli, tmp_path):
     r = subprocess.run(cmd, cwd=RAIZ, capture_output=True, text=True, encoding="utf-8",
                        env={**os.environ, "PYTHONIOENCODING": "utf-8"})
     assert r.returncode != 0 and "PartidoNuevo" in r.stderr
+
+
+def test_una_promesa_solo_parecida_no_es_candidata_a_cruce(cli, zips, tmp_path):
+    """Con e5-small dos promesas del mismo tema dan ~0,9 aunque sean medidas distintas; las repetidas, ≥0,95."""
+    env = _con_cruce(cli, zips, tmp_path)
+    _sembrar(cli, anio=2026, promesas=[("Bajaremos el IVA de la luz al cinco por ciento.", "Vivienda", 0)])
+    cli("test-seleccionar", "--anio", "2026", "--temas", "Vivienda", env=_env(LLM_FALSO_SELECCION="todos"))
+    conn = sqlite3.connect(cli.db)
+    conn.execute("DELETE FROM test_hechos")
+    conn.commit()
+    conn.close()
+    cli("test-seleccionar", "--anio", "2026", "--temas", "Vivienda", env=_env(LLM_FALSO_SELECCION="todos"))
+    cli("test-resumir", "--anio", "2026", env=env)
+    texto = _revision(cli, tmp_path, "2026").read_text(encoding="utf-8")
+    luz = next(t for t in texto.split("\n## ") if "IVA de la luz" in t)
+    assert "Posible cruce 2023" not in luz

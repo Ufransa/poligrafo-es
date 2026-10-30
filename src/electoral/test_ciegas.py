@@ -178,7 +178,7 @@ def neutralidad(conn, llm, anio: int, raiz: Path) -> dict:
             "delata": sum(r["delata"] for r in filas)}
 
 
-SIMILITUD_CRUCE = 0.85      # umbral medido del matcher (MIN_SIMILARITY)
+SIMILITUD_CRUCE = 0.95      # medido 2026-10-30: promesas repetidas 0,95-0,99; del mismo tema pero distintas, hasta ~0,946
 CASILLAS = ("Publicar", "Descartar", "El cruce 2023 es la misma promesa")
 
 
