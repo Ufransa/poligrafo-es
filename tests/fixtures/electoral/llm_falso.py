@@ -34,6 +34,11 @@ def transporte(body):
         ids = [int(i) for i in re.findall(r"\[id=(\d+)\]", usuario)]
         modo = os.environ.get("LLM_FALSO_SELECCION", "")
         return _resp({"ids": ids if modo == "todos" else [99999] if modo == "inventa" else ids[:3]})
+    if "RESUMIR:" in usuario:                         # test a ciegas: resumen neutral
+        promesa = usuario.split("PROMESA: ")[1].split("\n")[0]
+        return _resp({"resumen": f"Resumen neutral: {promesa}", "concreta": True,
+                      "materias": json.loads(os.environ.get("LLM_FALSO_MATERIAS", '["ley_ordinaria"]')),
+                      "coste": bool(os.environ.get("LLM_FALSO_COSTE_PUBLICO"))})
     if EXCEPCION and "FRAGMENTO:" not in usuario:
         import requests
         raise requests.ConnectionError("red caída (simulada)")

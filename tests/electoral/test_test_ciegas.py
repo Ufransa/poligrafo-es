@@ -68,3 +68,30 @@ def test_sin_presupuesto_se_para_y_se_reanuda_sin_duplicar(cli):
     cli("test-seleccionar", "--anio", "2023", "--temas", "Vivienda", env=_env())
     ids = [f["promesa_id"] for f in _filas(cli.db, "SELECT promesa_id FROM test_propuestas")]
     assert len(ids) == len(set(ids)) == 3
+
+
+def _seleccionadas(cli, promesas=VIVIENDA[:2]):
+    _sembrar(cli, promesas=promesas)
+    cli("test-seleccionar", "--anio", "2023", "--temas", "Vivienda", env=_env())
+
+
+def test_cada_propuesta_seleccionada_queda_resumida(cli):
+    _seleccionadas(cli)
+    cli("test-resumir", "--anio", "2023", env=_env())
+    filas = _filas(cli.db, "SELECT resumen, concreta, materias, coste FROM test_propuestas")
+    assert len(filas) == 2
+    assert all(f["resumen"].startswith("Resumen neutral:") and f["concreta"] == 1 and f["coste"] == 0 for f in filas)
+
+
+def test_una_materia_que_no_esta_en_la_tabla_se_descarta(cli):
+    _seleccionadas(cli)
+    cli("test-resumir", "--anio", "2023", env=_env(LLM_FALSO_MATERIAS='["ley_ordinaria", "inventada"]'))
+    assert all(json.loads(f["materias"]) == ["ley_ordinaria"] for f in _filas(cli.db, "SELECT materias FROM test_propuestas"))
+
+
+def test_resumir_dos_veces_no_vuelve_a_pagar(cli):
+    _seleccionadas(cli)
+    cli("test-resumir", "--anio", "2023", env=_env())
+    cli("test-resumir", "--anio", "2023", env=_env())
+    gasto = _filas(cli.db, "SELECT usd FROM gasto WHERE paso = 'test-resumir' ORDER BY id")
+    assert gasto[0]["usd"] > 0 and gasto[1]["usd"] == 0

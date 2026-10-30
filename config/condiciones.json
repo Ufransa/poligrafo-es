@@ -1,0 +1,17 @@
+{
+ "materias": {
+  "gobierno": {"descripcion_para_el_modelo": "Basta un reglamento o real decreto del Gobierno; no hace falta ley."},
+  "ley_ordinaria": {"descripcion_para_el_modelo": "Necesita una ley aprobada por mayoría simple en las Cortes (la mayoría de cambios fiscales, laborales, de vivienda o sanidad)."},
+  "ley_organica": {"descripcion_para_el_modelo": "Toca derechos fundamentales y libertades públicas, el régimen electoral general, los Estatutos de Autonomía o el Poder Judicial: ley orgánica."},
+  "compartida_vivienda": {"descripcion_para_el_modelo": "Vivienda: las comunidades autónomas tienen la competencia; el Estado actúa con ayudas, fiscalidad, legislación civil o bases de la economía."},
+  "compartida_sanidad": {"descripcion_para_el_modelo": "Sanidad: el Estado fija las bases y la coordinación; las comunidades gestionan los servicios de salud."},
+  "compartida_educacion": {"descripcion_para_el_modelo": "Educación: el Estado fija las normas básicas y los títulos; las comunidades gestionan los centros y desarrollan las normas."},
+  "reforma_constitucional": {"descripcion_para_el_modelo": "Exige cambiar la Constitución en una parte que no es el Título preliminar, los derechos fundamentales de la Sección 1.ª del Capítulo II del Título I ni la Corona."},
+  "reforma_constitucional_agravada": {"descripcion_para_el_modelo": "Exige cambiar el Título preliminar, los derechos fundamentales de la Sección 1.ª del Capítulo II del Título I o la Corona."},
+  "ue_fiscalidad_armonizada": {"descripcion_para_el_modelo": "Toca el IVA o los impuestos especiales armonizados (hidrocarburos, alcohol, tabaco, electricidad) más allá de lo que permite la directiva europea."},
+  "ue_comercio_aranceles": {"descripcion_para_el_modelo": "Toca aranceles, aduanas o acuerdos comerciales con terceros países: competencia exclusiva de la UE."},
+  "ue_ayudas_estado": {"descripcion_para_el_modelo": "Da ayudas públicas selectivas a empresas o sectores concretos que pueden falsear la competencia: necesita autorización de la Comisión Europea."},
+  "ue_pac": {"descripcion_para_el_modelo": "Cambia las ayudas o reglas de la Política Agraria Común o la política pesquera común."},
+  "exclusiva_autonomica": {"descripcion_para_el_modelo": "Materia que solo pueden regular y gestionar las comunidades autónomas, sin título estatal posible."}
+ }
+}
