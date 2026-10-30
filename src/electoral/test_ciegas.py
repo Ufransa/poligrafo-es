@@ -120,3 +120,46 @@ def resumir(conn, llm, anio: int, raiz: Path) -> int:
         n = sum(ex.map(una, pendientes))
     conn.commit()
     return n
+
+
+SISTEMA_ADIVINO = """Te dan el resumen de una propuesta de un programa electoral español de este año y la lista de partidos.
+Di de qué partido crees que es. Si no hay pistas, elige igualmente el más probable.
+
+Responde SOLO con JSON: {"partido": str}"""
+
+
+def neutralidad(conn, llm, anio: int, raiz: Path) -> dict:
+    """Otro modelo intenta adivinar el partido. Si acierta, se reescribe (como mucho MAX_REESCRITURAS veces);
+    si sigue acertando, la propuesta queda marcada `delata` para que Fran decida. Reanudable."""
+    materias = materias_validas(raiz)
+    partidos = [r["partido"] for r in conn.execute("SELECT DISTINCT partido FROM promesas WHERE anio = ? ORDER BY partido", (anio,))]
+    pendientes = conn.execute(FILAS + " AND t.resumen IS NOT NULL AND t.adivinado IS NULL", (anio,)).fetchall()
+
+    def adivinar(resumen):
+        out = llm.json(ADIVINO, SISTEMA_ADIVINO, f"Partidos: {', '.join(partidos)}\n\nADIVINAR:\n{resumen}", max_tokens=50)
+        return (out or {}).get("partido")
+
+    def una(f):
+        f = dict(f)
+        try:
+            adivinado = adivinar(f["resumen"])
+            while adivinado == f["partido"] and f["reescrituras"] < MAX_REESCRITURAS:
+                pista = "el adivinador lo atribuyó a su partido; quita lo que lo delate sin cambiar el fondo"
+                if not _resumir_una(conn, llm, f, materias, pista):
+                    break
+                f["reescrituras"] += 1
+                f["resumen"] = conn.execute("SELECT resumen FROM test_propuestas WHERE promesa_id = ?", (f["promesa_id"],)).fetchone()[0]
+                adivinado = adivinar(f["resumen"])
+        except PresupuestoAgotado:
+            return
+        if adivinado is None:
+            return
+        conn.execute("UPDATE test_propuestas SET adivinado = ?, reescrituras = ?, delata = ? WHERE promesa_id = ?",
+                     (adivinado, f["reescrituras"], int(adivinado == f["partido"]), f["promesa_id"]))
+
+    with ThreadPoolExecutor(8) as ex:
+        list(ex.map(una, pendientes))
+    conn.commit()
+    filas = conn.execute("SELECT partido, adivinado FROM test_propuestas WHERE anio = ? AND adivinado IS NOT NULL", (anio,)).fetchall()
+    aciertos = sum(r["partido"] == r["adivinado"] for r in filas)
+    return {"total": len(filas), "acertadas_al_final": aciertos, "delata": aciertos}

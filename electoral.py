@@ -69,6 +69,12 @@ def cmd_test_resumir(a, conn):
     print(_con_gasto("test-resumir", a, conn, lambda llm: test_ciegas.resumir(conn, llm, int(a.anio), RAIZ)), "resumidas")
 
 
+def cmd_test_neutralidad(a, conn):
+    r = _con_gasto("test-neutralidad", a, conn, lambda llm: test_ciegas.neutralidad(conn, llm, int(a.anio), RAIZ))
+    pct = 100 * r["acertadas_al_final"] / r["total"] if r["total"] else 0
+    print(f"acierto final: {r['acertadas_al_final']} de {r['total']} ({pct:.0f} %)")
+
+
 def cmd_fuentes(a, conn):
     iniciativas = fuentes.indice_iniciativas(fuentes.cargar_iniciativas(a.iniciativas))
     vs = conn.execute("SELECT * FROM votaciones WHERE excluida_tramite = 0").fetchall()
@@ -140,7 +146,7 @@ def main(argv=None):
     p = argparse.ArgumentParser(prog="electoral")
     sub = p.add_subparsers(dest="cmd", required=True)
     for nombre in ("descargar", "fuentes", "ingest-programa", "extraer", "juzgar", "exportar", "muestra", "todo", "noche",
-                   "test-seleccionar", "test-resumir"):
+                   "test-seleccionar", "test-resumir", "test-neutralidad"):
         s = sub.add_parser(nombre)
         s.add_argument("--db", default=str(RAIZ / "electoral.db"))
     for arg in ("anio", "partido", "origen"):
@@ -170,11 +176,14 @@ def main(argv=None):
     sub.choices["test-seleccionar"].add_argument("--tope", type=float, default=0.1)
     sub.choices["test-resumir"].add_argument("--anio", required=True)
     sub.choices["test-resumir"].add_argument("--tope", type=float, default=0.3)
+    sub.choices["test-neutralidad"].add_argument("--anio", required=True)
+    sub.choices["test-neutralidad"].add_argument("--tope", type=float, default=0.3)
     a = p.parse_args(argv)
     conn = edb.conectar(Path(a.db))
     {"descargar": cmd_descargar, "ingest-programa": cmd_ingest, "extraer": cmd_extraer, "juzgar": cmd_juzgar, "fuentes": cmd_fuentes, "muestra": cmd_muestra, "todo": cmd_todo,
      "exportar": cmd_exportar, "noche": cmd_noche,
-     "test-seleccionar": cmd_test_seleccionar, "test-resumir": cmd_test_resumir}[a.cmd](a, conn)
+     "test-seleccionar": cmd_test_seleccionar, "test-resumir": cmd_test_resumir,
+     "test-neutralidad": cmd_test_neutralidad}[a.cmd](a, conn)
 
 
 if __name__ == "__main__":

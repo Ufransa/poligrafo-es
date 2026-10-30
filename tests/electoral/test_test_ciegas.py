@@ -95,3 +95,29 @@ def test_resumir_dos_veces_no_vuelve_a_pagar(cli):
     cli("test-resumir", "--anio", "2023", env=_env())
     gasto = _filas(cli.db, "SELECT usd FROM gasto WHERE paso = 'test-resumir' ORDER BY id")
     assert gasto[0]["usd"] > 0 and gasto[1]["usd"] == 0
+
+
+def _resumidas(cli):
+    _seleccionadas(cli)
+    cli("test-resumir", "--anio", "2023", env=_env())
+
+
+def test_si_el_adivino_acierta_se_reescribe_dos_veces_y_se_marca(cli):
+    _resumidas(cli)
+    salida = cli("test-neutralidad", "--anio", "2023", env=_env(LLM_FALSO_ADIVINA="acierta"))
+    filas = _filas(cli.db, "SELECT reescrituras, delata, adivinado FROM test_propuestas")
+    assert filas and all(f["reescrituras"] == 2 and f["delata"] == 1 and f["adivinado"] == "PSOE" for f in filas)
+    assert "acierto final: 2 de 2" in salida
+
+
+def test_si_el_adivino_falla_no_se_toca(cli):
+    _resumidas(cli)
+    salida = cli("test-neutralidad", "--anio", "2023", env=_env(LLM_FALSO_ADIVINA="falla"))
+    assert all(f["reescrituras"] == 0 and f["delata"] == 0 for f in _filas(cli.db, "SELECT * FROM test_propuestas"))
+    assert "acierto final: 0 de 2" in salida
+
+
+def test_el_adivino_solo_ve_el_resumen(cli):
+    _resumidas(cli)
+    cli("test-neutralidad", "--anio", "2023", env=_env(LLM_FALSO_ADIVINA="falla", LLM_FALSO_FALLA_SI_VE_PROGRAMA="1"))
+    assert all(f["adivinado"] == "PP" for f in _filas(cli.db, "SELECT adivinado FROM test_propuestas"))

@@ -34,6 +34,10 @@ def transporte(body):
         ids = [int(i) for i in re.findall(r"\[id=(\d+)\]", usuario)]
         modo = os.environ.get("LLM_FALSO_SELECCION", "")
         return _resp({"ids": ids if modo == "todos" else [99999] if modo == "inventa" else ids[:3]})
+    if "ADIVINAR:" in usuario:                        # test a ciegas: ¿de qué partido es este resumen?
+        if os.environ.get("LLM_FALSO_FALLA_SI_VE_PROGRAMA") and ("CITA" in usuario or "TEXTO DEL PROGRAMA" in usuario):
+            return {"choices": [{"message": {"content": "no es json"}}], "usage": {"cost": COSTE}}
+        return _resp({"partido": "PSOE" if os.environ.get("LLM_FALSO_ADIVINA") == "acierta" else "PP"})
     if "RESUMIR:" in usuario:                         # test a ciegas: resumen neutral
         promesa = usuario.split("PROMESA: ")[1].split("\n")[0]
         return _resp({"resumen": f"Resumen neutral: {promesa}", "concreta": True,
