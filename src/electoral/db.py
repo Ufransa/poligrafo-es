@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS cruces (
 CREATE TABLE IF NOT EXISTS test_propuestas (
     promesa_id INTEGER PRIMARY KEY, anio INTEGER, partido TEXT, tema TEXT,
     resumen TEXT, concreta INTEGER, materias TEXT, coste INTEGER,
-    reescrituras INTEGER DEFAULT 0, adivinado TEXT, delata INTEGER DEFAULT 0
+    reescrituras INTEGER DEFAULT 0, adivinado TEXT, pista TEXT, delata INTEGER DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS test_hechos (anio INTEGER, partido TEXT, tema TEXT, PRIMARY KEY (anio, partido, tema));
 CREATE TABLE IF NOT EXISTS gasto (id INTEGER PRIMARY KEY, fecha TEXT, paso TEXT, usd REAL);
@@ -60,5 +60,9 @@ def conectar(ruta: Path) -> sqlite3.Connection:
             conn.execute(f"ALTER TABLE juicios ADD COLUMN {col} TEXT")
         except sqlite3.OperationalError:
             pass
+    try:                                          # qué le dio la pista al adivinador (forma / postura)
+        conn.execute("ALTER TABLE test_propuestas ADD COLUMN pista TEXT")
+    except sqlite3.OperationalError:
+        pass
     conn.execute("CREATE TABLE IF NOT EXISTS boe (clave TEXT PRIMARY KEY, identificador TEXT)")
     return conn

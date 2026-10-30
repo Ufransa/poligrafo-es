@@ -37,7 +37,8 @@ def transporte(body):
     if "ADIVINAR:" in usuario:                        # test a ciegas: ¿de qué partido es este resumen?
         if os.environ.get("LLM_FALSO_FALLA_SI_VE_PROGRAMA") and ("CITA" in usuario or "TEXTO DEL PROGRAMA" in usuario):
             return {"choices": [{"message": {"content": "no es json"}}], "usage": {"cost": COSTE}}
-        return _resp({"partido": "PSOE" if os.environ.get("LLM_FALSO_ADIVINA") == "acierta" else "PP"})
+        return _resp({"partido": "PSOE" if os.environ.get("LLM_FALSO_ADIVINA") == "acierta" else "PP",
+                      "pista": os.environ.get("LLM_FALSO_PISTA", "forma"), "por_que": "prueba"})
     if "RESUMIR:" in usuario:                         # test a ciegas: resumen neutral
         promesa = usuario.split("PROMESA: ")[1].split("\n")[0]
         return _resp({"resumen": f"Resumen neutral: {promesa}", "concreta": True,

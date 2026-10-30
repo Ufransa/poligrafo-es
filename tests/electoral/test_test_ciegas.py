@@ -105,12 +105,22 @@ def _resumidas(cli):
     cli("test-resumir", "--anio", "2023", env=_env())
 
 
-def test_si_el_adivino_acierta_se_reescribe_dos_veces_y_se_marca(cli):
+def test_si_el_adivino_acierta_por_la_forma_se_reescribe_dos_veces_y_se_marca(cli):
     _resumidas(cli)
-    salida = cli("test-neutralidad", "--anio", "2023", env=_env(LLM_FALSO_ADIVINA="acierta"))
-    filas = _filas(cli.db, "SELECT reescrituras, delata, adivinado FROM test_propuestas")
+    salida = cli("test-neutralidad", "--anio", "2023", env=_env(LLM_FALSO_ADIVINA="acierta", LLM_FALSO_PISTA="forma"))
+    filas = _filas(cli.db, "SELECT reescrituras, delata, adivinado, pista FROM test_propuestas")
     assert filas and all(f["reescrituras"] == 2 and f["delata"] == 1 and f["adivinado"] == "PSOE" for f in filas)
-    assert "acierto final: 2 de 2" in salida
+    assert all(f["pista"].startswith("forma:") for f in filas)
+    assert "fugas de forma: 2 de 2" in salida and "acierto final: 2 de 2" in salida
+
+
+def test_si_el_adivino_acierta_por_la_postura_no_se_toca(cli):
+    """Una postura política es la propuesta misma: adivinarla es parte del juego (Fran, 2026-10-30)."""
+    _resumidas(cli)
+    salida = cli("test-neutralidad", "--anio", "2023", env=_env(LLM_FALSO_ADIVINA="acierta", LLM_FALSO_PISTA="postura"))
+    filas = _filas(cli.db, "SELECT reescrituras, delata, pista FROM test_propuestas")
+    assert filas and all(f["reescrituras"] == 0 and f["delata"] == 0 and f["pista"].startswith("postura:") for f in filas)
+    assert "fugas de forma: 0 de 2" in salida and "acierto final: 2 de 2" in salida
 
 
 def test_si_el_adivino_falla_no_se_toca(cli):

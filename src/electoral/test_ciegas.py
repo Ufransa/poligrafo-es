@@ -63,7 +63,12 @@ menos de 30.000 euros» sí, si el texto lo dice.
 Reglas de neutralidad (obligatorias):
 - Ni el nombre del partido ni el de sus líderes, ni ninguna pista de quién gobierna o gobernó.
 - Nada de primera persona («haremos», «nuestro»): describe la medida en impersonal.
-- Nada de balance de gestión («como ya hicimos», «seguiremos»).
+- Nada de balance de gestión («como ya hicimos», «seguiremos»). Tampoco digas que la medida ya existe, se
+  amplía o se mantiene, ni qué gobierno o institución la aplica hoy: describe lo que quedaría tras aplicarla
+  (no «se amplía hasta 37.800 € el umbral de las ayudas a hipotecados», sino «ayudas a hipotecados con ingresos
+  de hasta 37.800 €»).
+- Nada de nombres propios de organismos de un partido o de una comunidad salvo que sean el objeto: usa una
+  descripción genérica («el organismo público de vivienda de Galicia»).
 - Nada de léxico identitario o de marca («Euskal Herria», «la Nación española», «justicia climática», «Països
   Catalans»). Si el territorio o la identidad es el objeto mismo de la propuesta, usa el término jurídico neutro
   (p. ej. «la Comunidad Autónoma del País Vasco», «Cataluña»).
@@ -125,44 +130,52 @@ def resumir(conn, llm, anio: int, raiz: Path) -> int:
 SISTEMA_ADIVINO = """Te dan el resumen de una propuesta de un programa electoral español de este año y la lista de partidos.
 Di de qué partido crees que es. Si no hay pistas, elige igualmente el más probable.
 
-Responde SOLO con JSON: {"partido": str}"""
+Di también QUÉ te dio la pista:
+- "forma": una palabra, expresión, nombre propio, tono o referencia (a un gobierno, a una gestión pasada, a un
+  organismo) que delata al partido aunque la medida la pudiera proponer otro.
+- "postura": la medida en sí, es decir, la posición política que defiende. Otro redactado no lo cambiaría.
+
+Responde SOLO con JSON: {"partido": str, "pista": "forma"|"postura", "por_que": str}"""
 
 
 def neutralidad(conn, llm, anio: int, raiz: Path) -> dict:
-    """Otro modelo intenta adivinar el partido. Si acierta, se reescribe (como mucho MAX_REESCRITURAS veces);
-    si sigue acertando, la propuesta queda marcada `delata` para que Fran decida. Reanudable."""
+    """Otro modelo intenta adivinar el partido y dice qué le dio la pista. Solo una fuga de FORMA se reescribe
+    (como mucho MAX_REESCRITURAS veces) y, si sigue, queda marcada `delata` para Fran. Acertar por la POSTURA es
+    adivinar la propuesta misma: no se toca (Fran, 2026-10-30). Reanudable."""
     materias = materias_validas(raiz)
     partidos = [r["partido"] for r in conn.execute("SELECT DISTINCT partido FROM promesas WHERE anio = ? ORDER BY partido", (anio,))]
     pendientes = conn.execute(FILAS + " AND t.resumen IS NOT NULL AND t.adivinado IS NULL", (anio,)).fetchall()
 
     def adivinar(resumen):
-        out = llm.json(ADIVINO, SISTEMA_ADIVINO, f"Partidos: {', '.join(partidos)}\n\nADIVINAR:\n{resumen}", max_tokens=50)
-        return (out or {}).get("partido")
+        out = llm.json(ADIVINO, SISTEMA_ADIVINO, f"Partidos: {', '.join(partidos)}\n\nADIVINAR:\n{resumen}", max_tokens=150) or {}
+        pista = out.get("pista") if out.get("pista") in ("forma", "postura") else "forma"   # ante la duda, se reescribe
+        return out.get("partido"), f"{pista}: {out.get('por_que') or ''}".strip()
 
     def una(f):
         f = dict(f)
         try:
-            adivinado = adivinar(f["resumen"])
-            while adivinado == f["partido"] and f["reescrituras"] < MAX_REESCRITURAS:
-                pista = "el adivinador lo atribuyó a su partido; quita lo que lo delate sin cambiar el fondo"
-                if not _resumir_una(conn, llm, f, materias, pista):
+            adivinado, pista = adivinar(f["resumen"])
+            while adivinado == f["partido"] and pista.startswith("forma") and f["reescrituras"] < MAX_REESCRITURAS:
+                if not _resumir_una(conn, llm, f, materias, f"el adivinador lo atribuyó a su partido por esto: «{pista}»; "
+                                                           "quítalo sin cambiar el fondo de la medida"):
                     break
                 f["reescrituras"] += 1
                 f["resumen"] = conn.execute("SELECT resumen FROM test_propuestas WHERE promesa_id = ?", (f["promesa_id"],)).fetchone()[0]
-                adivinado = adivinar(f["resumen"])
+                adivinado, pista = adivinar(f["resumen"])
         except PresupuestoAgotado:
             return
         if adivinado is None:
             return
-        conn.execute("UPDATE test_propuestas SET adivinado = ?, reescrituras = ?, delata = ? WHERE promesa_id = ?",
-                     (adivinado, f["reescrituras"], int(adivinado == f["partido"]), f["promesa_id"]))
+        delata = adivinado == f["partido"] and pista.startswith("forma")
+        conn.execute("UPDATE test_propuestas SET adivinado = ?, pista = ?, reescrituras = ?, delata = ? WHERE promesa_id = ?",
+                     (adivinado, pista, f["reescrituras"], int(delata), f["promesa_id"]))
 
     with ThreadPoolExecutor(8) as ex:
         list(ex.map(una, pendientes))
     conn.commit()
-    filas = conn.execute("SELECT partido, adivinado FROM test_propuestas WHERE anio = ? AND adivinado IS NOT NULL", (anio,)).fetchall()
-    aciertos = sum(r["partido"] == r["adivinado"] for r in filas)
-    return {"total": len(filas), "acertadas_al_final": aciertos, "delata": aciertos}
+    filas = conn.execute("SELECT partido, adivinado, delata FROM test_propuestas WHERE anio = ? AND adivinado IS NOT NULL", (anio,)).fetchall()
+    return {"total": len(filas), "acertadas_al_final": sum(r["partido"] == r["adivinado"] for r in filas),
+            "delata": sum(r["delata"] for r in filas)}
 
 
 SIMILITUD_CRUCE = 0.85      # umbral medido del matcher (MIN_SIMILARITY)
@@ -235,7 +248,9 @@ def generar_revision(conn, raiz: Path, anio: int, salida: Path) -> int:
               + (" · **INVIABLE**" if cond["inviable"] else ""),
               f"**Cita (p. {f['pagina']}):** «{f['cita']}» ({f['url_programa']}#page={f['pagina']})"]
         if f["delata"]:
-            L.append("⚠️ El adivinador sigue acertando el partido.")
+            L.append(f"⚠️ Se delata por la forma: {f['pista']}")
+        elif f["adivinado"] == f["partido"]:
+            L.append(f"(El adivinador acierta por la postura, no se toca: {f['pista']})")
         if f["promesa_id"] in cruces:
             pid, texto, c = cruces[f["promesa_id"]]
             L.append(f"**Posible cruce 2023:** «{texto}» (id={pid}), {frase_cruce(c['veredicto'])} en "

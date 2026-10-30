@@ -72,6 +72,8 @@ def cmd_test_resumir(a, conn):
 def cmd_test_neutralidad(a, conn):
     r = _con_gasto("test-neutralidad", a, conn, lambda llm: test_ciegas.neutralidad(conn, llm, int(a.anio), RAIZ))
     pct = 100 * r["acertadas_al_final"] / r["total"] if r["total"] else 0
+    forma = 100 * r["delata"] / r["total"] if r["total"] else 0
+    print(f"fugas de forma: {r['delata']} de {r['total']} ({forma:.0f} %)")
     print(f"acierto final: {r['acertadas_al_final']} de {r['total']} ({pct:.0f} %)")
 
 
