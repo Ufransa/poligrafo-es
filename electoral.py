@@ -75,6 +75,15 @@ def cmd_test_neutralidad(a, conn):
     print(f"acierto final: {r['acertadas_al_final']} de {r['total']} ({pct:.0f} %)")
 
 
+def cmd_test_revision(a, conn):
+    salida = Path(a.salida) if a.salida else RAIZ / "docs" / f"revision_test_{a.anio}.md"
+    print(test_ciegas.generar_revision(conn, RAIZ, int(a.anio), salida), "tarjetas en", salida)
+
+
+def cmd_test_aprobar(a, conn):
+    print(test_ciegas.aprobar(conn, RAIZ, int(a.anio), Path(a.revision), Path(a.destino)), "aprobadas")
+
+
 def cmd_fuentes(a, conn):
     iniciativas = fuentes.indice_iniciativas(fuentes.cargar_iniciativas(a.iniciativas))
     vs = conn.execute("SELECT * FROM votaciones WHERE excluida_tramite = 0").fetchall()
@@ -146,7 +155,8 @@ def main(argv=None):
     p = argparse.ArgumentParser(prog="electoral")
     sub = p.add_subparsers(dest="cmd", required=True)
     for nombre in ("descargar", "fuentes", "ingest-programa", "extraer", "juzgar", "exportar", "muestra", "todo", "noche",
-                   "test-seleccionar", "test-resumir", "test-neutralidad"):
+                   "test-seleccionar", "test-resumir", "test-neutralidad",
+                   "test-revision", "test-aprobar"):
         s = sub.add_parser(nombre)
         s.add_argument("--db", default=str(RAIZ / "electoral.db"))
     for arg in ("anio", "partido", "origen"):
@@ -178,12 +188,18 @@ def main(argv=None):
     sub.choices["test-resumir"].add_argument("--tope", type=float, default=0.3)
     sub.choices["test-neutralidad"].add_argument("--anio", required=True)
     sub.choices["test-neutralidad"].add_argument("--tope", type=float, default=0.3)
+    for nombre in ("test-revision", "test-aprobar"):
+        sub.choices[nombre].add_argument("--anio", required=True)
+    sub.choices["test-revision"].add_argument("--salida", help="por defecto, docs/revision_test_<anio>.md")
+    sub.choices["test-aprobar"].add_argument("--revision", required=True)
+    sub.choices["test-aprobar"].add_argument("--destino", default=str(RAIZ / "config" / "test_ciegas.json"))
     a = p.parse_args(argv)
     conn = edb.conectar(Path(a.db))
     {"descargar": cmd_descargar, "ingest-programa": cmd_ingest, "extraer": cmd_extraer, "juzgar": cmd_juzgar, "fuentes": cmd_fuentes, "muestra": cmd_muestra, "todo": cmd_todo,
      "exportar": cmd_exportar, "noche": cmd_noche,
      "test-seleccionar": cmd_test_seleccionar, "test-resumir": cmd_test_resumir,
-     "test-neutralidad": cmd_test_neutralidad}[a.cmd](a, conn)
+     "test-neutralidad": cmd_test_neutralidad,
+     "test-revision": cmd_test_revision, "test-aprobar": cmd_test_aprobar}[a.cmd](a, conn)
 
 
 if __name__ == "__main__":

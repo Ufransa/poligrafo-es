@@ -163,3 +163,108 @@ def neutralidad(conn, llm, anio: int, raiz: Path) -> dict:
     filas = conn.execute("SELECT partido, adivinado FROM test_propuestas WHERE anio = ? AND adivinado IS NOT NULL", (anio,)).fetchall()
     aciertos = sum(r["partido"] == r["adivinado"] for r in filas)
     return {"total": len(filas), "acertadas_al_final": aciertos, "delata": aciertos}
+
+
+SIMILITUD_CRUCE = 0.85      # umbral medido del matcher (MIN_SIMILARITY)
+CASILLAS = ("Publicar", "Descartar", "El cruce 2023 es la misma promesa")
+
+
+def cruces_firmes(conn, raiz: Path) -> dict:
+    """promesa de 2023 -> cruces firmes (los que la web publica como veredicto), el más reciente primero."""
+    from src.electoral import exportar
+    fechas = {r["id"]: r["fecha"] for r in conn.execute("SELECT id, fecha FROM votaciones")}
+    firmes: dict[int, list] = {}
+    for c in exportar._cruces(conn, exportar._confirmados(raiz / "config" / "revision_manual.json")):
+        if c["nivel"] == "veredicto":
+            firmes.setdefault(c["promesa_id"], []).append(c)
+    for lista in firmes.values():
+        lista.sort(key=lambda c: fechas.get(c["votacion_id"]) or "", reverse=True)
+    return firmes
+
+
+def _candidatos_cruce(conn, raiz: Path, filas) -> dict:
+    """promesa del año -> (promesa de 2023 del mismo partido con cruce firme, su texto, su cruce más reciente)."""
+    import numpy as np
+    from src.electoral import juez
+    from src.embeddings import from_blob
+    firmes = cruces_firmes(conn, raiz)
+    if not firmes:
+        return {}
+    juez.asegurar_embeddings(conn)
+    previas = conn.execute(f"SELECT id, partido, texto, embedding FROM promesas WHERE id IN ({','.join('?' * len(firmes))})",
+                           list(firmes)).fetchall()
+    salida = {}
+    for f in filas:
+        propia = conn.execute("SELECT embedding FROM promesas WHERE id = ?", (f["promesa_id"],)).fetchone()[0]
+        if propia is None:
+            continue
+        v = from_blob(propia)
+        mejor = None
+        for p in previas:
+            if p["partido"] != f["partido"] or p["id"] == f["promesa_id"]:
+                continue
+            w = from_blob(p["embedding"])
+            sim = float(np.dot(v, w) / (np.linalg.norm(v) * np.linalg.norm(w)))
+            if sim >= SIMILITUD_CRUCE and (mejor is None or sim > mejor[0]):
+                mejor = (sim, p)
+        if mejor:
+            salida[f["promesa_id"]] = (mejor[1]["id"], mejor[1]["texto"], firmes[mejor[1]["id"]][0])
+    return salida
+
+
+def frase_cruce(veredicto: str) -> str:
+    return "votó de acuerdo con su promesa" if veredicto == "cumple" else "votó en contra de su promesa"
+
+
+def generar_revision(conn, raiz: Path, anio: int, salida: Path) -> int:
+    from src.electoral import condiciones
+    tabla = condiciones.cargar(raiz)
+    filas = conn.execute(FILAS.replace("SELECT t.*", "SELECT t.*, p.pagina, b.url_programa")
+                         + " AND t.resumen IS NOT NULL ORDER BY t.tema, t.partido, t.promesa_id", (anio,)).fetchall()
+    cruces = _candidatos_cruce(conn, raiz, filas)
+    expedientes = {r["id"]: r["expediente"] for r in conn.execute("SELECT id, expediente FROM votaciones")}
+    L = [f"# Revisión del test a ciegas ({anio})", "",
+         "Marca «Publicar» o «Descartar» en cada tarjeta. Si el resumen no vale, escribe el bueno tras «Resumen corregido:».",
+         "Si hay posible cruce con 2023, márcalo solo si es la misma promesa. Sin marca, la tarjeta no se publica."]
+    for n, f in enumerate(filas, 1):
+        cond = condiciones.resolver(json.loads(f["materias"] or "[]"), bool(f["coste"]), tabla)
+        etiquetas = "; ".join(c["etiqueta"] for c in cond["condiciones"]) or "ninguna"
+        L += ["", f"## {n} · id={f['promesa_id']} · {f['tema']} · {f['partido']}",
+              f"**Resumen:** {f['resumen']}",
+              f"**Concreta:** {'sí' if f['concreta'] else 'no'} · **Condiciones:** {etiquetas}"
+              + (" · **INVIABLE**" if cond["inviable"] else ""),
+              f"**Cita (p. {f['pagina']}):** «{f['cita']}» ({f['url_programa']}#page={f['pagina']})"]
+        if f["delata"]:
+            L.append("⚠️ El adivinador sigue acertando el partido.")
+        if f["promesa_id"] in cruces:
+            pid, texto, c = cruces[f["promesa_id"]]
+            L.append(f"**Posible cruce 2023:** «{texto}» (id={pid}), {frase_cruce(c['veredicto'])} en "
+                     f"«{(expedientes.get(c['votacion_id']) or '')[:200]}»")
+        L += [f"- [ ] {c}" for c in CASILLAS] + ["Resumen corregido:"]
+    salida.write_text("\n".join(L) + "\n", encoding="utf-8")
+    return len(filas)
+
+
+def aprobar(conn, raiz: Path, anio: int, revision: Path, destino: Path) -> int:
+    """Lo marcado «Publicar» pasa a config/test_ciegas.json (solo se reemplaza la lista de ese año)."""
+    import re
+    from datetime import date
+    aprobadas = []
+    for tarjeta in revision.read_text(encoding="utf-8").split("\n## ")[1:]:
+        pid = int(re.search(r"id=(\d+)", tarjeta).group(1))
+        marcada = {c: bool(re.search(r"- \[[xX]\] " + re.escape(c), tarjeta)) for c in CASILLAS}
+        if marcada["Publicar"] and marcada["Descartar"]:
+            raise SystemExit(f"La tarjeta id={pid} está marcada como Publicar y Descartar a la vez")
+        if not marcada["Publicar"]:
+            continue
+        f = conn.execute("SELECT * FROM test_propuestas WHERE promesa_id = ?", (pid,)).fetchone()
+        corregido = tarjeta.split("Resumen corregido:", 1)[1].strip() if "Resumen corregido:" in tarjeta else ""
+        cruce = re.search(r"\*\*Posible cruce 2023:\*\*.*?\(id=(\d+)\)", tarjeta)
+        aprobadas.append({"promesa_id": pid, "resumen": corregido or f["resumen"], "concreta": bool(f["concreta"]),
+                          "materias": json.loads(f["materias"] or "[]"), "coste": bool(f["coste"]),
+                          "promesa_2023_id": int(cruce.group(1)) if cruce and marcada[CASILLAS[2]] else None,
+                          "revisado_por": "Fran", "fecha": date.today().isoformat()})
+    datos = json.loads(destino.read_text(encoding="utf-8")) if destino.exists() else {}
+    datos[str(anio)] = aprobadas
+    destino.write_text(json.dumps(datos, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    return len(aprobadas)

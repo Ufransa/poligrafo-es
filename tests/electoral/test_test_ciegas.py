@@ -4,9 +4,12 @@ Ver docs/superpowers/specs/2026-10-30-test-a-ciegas-design.md."""
 import json
 import os
 import sqlite3
+import subprocess
+import sys
 from pathlib import Path
 
-FIX = Path(__file__).resolve().parents[1] / "fixtures" / "electoral"
+RAIZ = Path(__file__).resolve().parents[2]
+FIX = RAIZ / "tests" / "fixtures" / "electoral"
 
 
 def _env(**extra):
@@ -121,3 +124,81 @@ def test_el_adivino_solo_ve_el_resumen(cli):
     _resumidas(cli)
     cli("test-neutralidad", "--anio", "2023", env=_env(LLM_FALSO_ADIVINA="falla", LLM_FALSO_FALLA_SI_VE_PROGRAMA="1"))
     assert all(f["adivinado"] == "PP" for f in _filas(cli.db, "SELECT adivinado FROM test_propuestas"))
+
+
+def _revision(cli, tmp_path, anio="2023"):
+    md = tmp_path / "revision.md"
+    cli("test-revision", "--anio", anio, "--salida", str(md))
+    return md
+
+
+def _marcar(md, n, casilla, corregido=None):
+    """Marca una casilla en la tarjeta n (1, 2, ...) del fichero de revisión, como haría Fran."""
+    cabecera, *tarjetas = md.read_text(encoding="utf-8").split("\n## ")
+    tarjetas[n - 1] = tarjetas[n - 1].replace(f"- [ ] {casilla}", f"- [x] {casilla}")
+    if corregido:
+        tarjetas[n - 1] = tarjetas[n - 1].replace("Resumen corregido:", f"Resumen corregido: {corregido}")
+    md.write_text("\n## ".join([cabecera, *tarjetas]), encoding="utf-8")
+
+
+def _aprobar(cli, md, tmp_path, anio="2023", ok=True):
+    destino = tmp_path / "test_ciegas.json"
+    cmd = [sys.executable, str(RAIZ / "electoral.py"), "test-aprobar", "--anio", anio, "--revision", str(md),
+           "--destino", str(destino), "--db", str(cli.db)]
+    r = subprocess.run(cmd, cwd=RAIZ, capture_output=True, text=True, encoding="utf-8",
+                       env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+    assert (r.returncode == 0) == ok, r.stderr
+    return json.loads(destino.read_text(encoding="utf-8"))[anio] if ok else r.stderr
+
+
+def test_la_revision_lleva_resumen_condiciones_y_cita(cli, tmp_path):
+    _resumidas(cli)
+    texto = _revision(cli, tmp_path).read_text(encoding="utf-8")
+    assert texto.count("\n## ") == 2
+    assert "**Condiciones:** Ley ordinaria" in texto and "Resumen neutral:" in texto and "**Cita (p. 1):**" in texto
+
+
+def test_sin_marca_no_se_publica(cli, tmp_path):
+    _resumidas(cli)
+    assert _aprobar(cli, _revision(cli, tmp_path), tmp_path) == []
+
+
+def test_publicar_y_descartar(cli, tmp_path):
+    _resumidas(cli)
+    md = _revision(cli, tmp_path)
+    _marcar(md, 1, "Publicar")
+    _marcar(md, 2, "Descartar")
+    aprobadas = _aprobar(cli, md, tmp_path)
+    assert len(aprobadas) == 1 and aprobadas[0]["revisado_por"] == "Fran" and aprobadas[0]["promesa_2023_id"] is None
+
+
+def test_el_resumen_corregido_sustituye_al_del_modelo(cli, tmp_path):
+    _resumidas(cli)
+    md = _revision(cli, tmp_path)
+    _marcar(md, 1, "Publicar", corregido="Texto que escribe Fran.")
+    assert _aprobar(cli, md, tmp_path)[0]["resumen"] == "Texto que escribe Fran."
+
+
+def test_publicar_y_descartar_a_la_vez_es_un_error(cli, tmp_path):
+    _resumidas(cli)
+    md = _revision(cli, tmp_path)
+    _marcar(md, 1, "Publicar")
+    _marcar(md, 1, "Descartar")
+    assert "id=" in _aprobar(cli, md, tmp_path, ok=False)
+
+
+def test_el_cruce_2023_solo_se_guarda_si_fran_lo_confirma(cli, zips, tmp_path):
+    env = _env(LLM_FALSO_TODOS="1")
+    cli("descargar", "--zips", zips)
+    for anio in ("2023", "2026"):
+        cli("ingest-programa", anio, "PSOE", str(FIX / "programa_prueba.pdf"), env=env)
+    cli("extraer", env=env)
+    cli("juzgar", "--k", "3", env=env)
+    cli("test-seleccionar", "--anio", "2026", "--temas", "Vivienda", env=env)
+    cli("test-resumir", "--anio", "2026", env=env)
+    md = _revision(cli, tmp_path, "2026")
+    assert "**Posible cruce 2023:**" in md.read_text(encoding="utf-8")
+    _marcar(md, 1, "Publicar")
+    assert _aprobar(cli, md, tmp_path, "2026")[0]["promesa_2023_id"] is None
+    _marcar(md, 1, "El cruce 2023 es la misma promesa")
+    assert isinstance(_aprobar(cli, md, tmp_path, "2026")[0]["promesa_2023_id"], int)
