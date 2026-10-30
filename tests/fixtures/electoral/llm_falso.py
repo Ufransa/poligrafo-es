@@ -30,6 +30,10 @@ def transporte(body):
         if os.environ.get("LLM_FALSO_CITA_FALSA"):
             promesas.append({"promesa": "Promesa inventada", "cita": "Esta frase no aparece en ningún programa", "tema": "Vivienda", "procedimental": False})
         return _resp({"promesas": promesas})
+    if "SELECCIONAR:" in usuario:                     # test a ciegas: selección
+        ids = [int(i) for i in re.findall(r"\[id=(\d+)\]", usuario)]
+        modo = os.environ.get("LLM_FALSO_SELECCION", "")
+        return _resp({"ids": ids if modo == "todos" else [99999] if modo == "inventa" else ids[:3]})
     if EXCEPCION and "FRAGMENTO:" not in usuario:
         import requests
         raise requests.ConnectionError("red caída (simulada)")

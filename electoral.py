@@ -7,7 +7,7 @@ from pathlib import Path
 from src.electoral import db as edb
 import json
 
-from src.electoral import exportar, fuentes, juez, noche, programas, votaciones
+from src.electoral import exportar, fuentes, juez, noche, programas, test_ciegas, votaciones
 from src.electoral.llm import LLM
 
 RAIZ = Path(__file__).resolve().parent
@@ -46,6 +46,23 @@ def cmd_juzgar(a, conn):
         conn.execute("INSERT INTO gasto (fecha, paso, usd) VALUES (datetime('now'), 'juzgar', ?)", (llm.gastado,))
         conn.commit()
         print(f"gastado {llm.gastado:.4f} $")
+
+
+def _con_gasto(paso, a, conn, fn):
+    """Ejecuta un paso con LLM y registra lo gastado aunque falle."""
+    llm = LLM(a.tope)
+    try:
+        return fn(llm)
+    finally:
+        conn.execute("INSERT INTO gasto (fecha, paso, usd) VALUES (datetime('now'), ?, ?)", (paso, llm.gastado))
+        conn.commit()
+        print(f"gastado {llm.gastado:.4f} $")
+
+
+def cmd_test_seleccionar(a, conn):
+    temas = a.temas.split(",") if a.temas else test_ciegas.TEMAS_LANZAMIENTO
+    n = _con_gasto("test-seleccionar", a, conn, lambda llm: test_ciegas.seleccionar(conn, llm, int(a.anio), temas))
+    print(n, "propuestas seleccionadas")
 
 
 def cmd_fuentes(a, conn):
@@ -118,7 +135,8 @@ def cmd_exportar(a, conn):
 def main(argv=None):
     p = argparse.ArgumentParser(prog="electoral")
     sub = p.add_subparsers(dest="cmd", required=True)
-    for nombre in ("descargar", "fuentes", "ingest-programa", "extraer", "juzgar", "exportar", "muestra", "todo", "noche"):
+    for nombre in ("descargar", "fuentes", "ingest-programa", "extraer", "juzgar", "exportar", "muestra", "todo", "noche",
+                   "test-seleccionar"):
         s = sub.add_parser(nombre)
         s.add_argument("--db", default=str(RAIZ / "electoral.db"))
     for arg in ("anio", "partido", "origen"):
@@ -143,10 +161,14 @@ def main(argv=None):
     sub.choices["noche"].add_argument("--salida", default=str(RAIZ / "datos.json"))
     sub.choices["noche"].add_argument("--salud", default=str(RAIZ / "electoral_data" / "noche.json"))
     sub.choices["exportar"].add_argument("--revision", help="JSON con los cruces confirmados a mano (por defecto, config/revision_manual.json)")
+    sub.choices["test-seleccionar"].add_argument("--anio", required=True)
+    sub.choices["test-seleccionar"].add_argument("--temas", help="separados por comas (por defecto, los del lanzamiento)")
+    sub.choices["test-seleccionar"].add_argument("--tope", type=float, default=0.1)
     a = p.parse_args(argv)
     conn = edb.conectar(Path(a.db))
     {"descargar": cmd_descargar, "ingest-programa": cmd_ingest, "extraer": cmd_extraer, "juzgar": cmd_juzgar, "fuentes": cmd_fuentes, "muestra": cmd_muestra, "todo": cmd_todo,
-     "exportar": cmd_exportar, "noche": cmd_noche}[a.cmd](a, conn)
+     "exportar": cmd_exportar, "noche": cmd_noche,
+     "test-seleccionar": cmd_test_seleccionar}[a.cmd](a, conn)
 
 
 if __name__ == "__main__":
