@@ -98,3 +98,23 @@ def test_si_la_web_recibe_cambios_de_codigo_la_noche_sigue_publicando(tmp_path, 
     assert r.returncode == 0, r.stderr
     assert _git("show", "main:README.md", cwd=remoto) == "web con cambios"
     assert json.loads(_git("show", "main:data/datos.json", cwd=remoto))["meta"]
+
+
+def test_un_partido_desconocido_en_el_test_queda_en_la_salud(tmp_path, zips):
+    """Un error de exportación del test a ciegas no puede saltarse la salud que vigila ARGUS."""
+    _, clon = _web(tmp_path)
+    db = tmp_path / "electoral.db"
+    entorno = {**os.environ, "ELECTORAL_LLM_FALSO": str(FIX / "llm_falso.py")}
+    for args in (["ingest-programa", "2026", "PartidoNuevo", str(FIX / "programa_prueba.pdf")], ["extraer"]):
+        subprocess.run([sys.executable, str(RAIZ / "electoral.py"), *args, "--db", str(db)], cwd=RAIZ, env=entorno, check=True)
+    import sqlite3
+    conn = sqlite3.connect(db)
+    pid = conn.execute("SELECT id FROM promesas WHERE procedimental = 0 LIMIT 1").fetchone()[0]
+    conn.close()
+    test = tmp_path / "test_ciegas.json"
+    test.write_text(json.dumps({"2026": [{"promesa_id": pid, "resumen": "r", "concreta": True, "materias": [], "coste": False,
+                                          "promesa_2023_id": None, "revisado_por": "Fran", "fecha": "2026-10-30"}]}), encoding="utf-8")
+    r = _noche(tmp_path, zips, clon, tmp_path / "avisos.json", ELECTORAL_TEST_CIEGAS=str(test))
+    assert r.returncode != 0
+    salud = json.loads((tmp_path / "noche.json").read_text(encoding="utf-8"))
+    assert salud["publicado"] is False and "PartidoNuevo" in salud["error"]

@@ -1,5 +1,6 @@
 # src/electoral/exportar.py
 import json
+import os
 import sys
 
 import jsonschema
@@ -105,7 +106,8 @@ def _test(conn, raiz: Path, ruta: Path, anio: int, partidos: list, votaciones: l
             print(f"aviso: la propuesta aprobada {a['promesa_id']} ya no está en la base; no se publica", file=sys.stderr)
             continue
         if p["partido"] not in nombres:
-            raise SystemExit(f"El partido {p['partido']} no está en config/partidos_electoral.json: añádelo antes de publicar")
+            # ValueError y no SystemExit: la noche lo captura y lo deja en la salud que vigila ARGUS.
+            raise ValueError(f"El partido {p['partido']} no está en config/partidos_electoral.json: añádelo antes de publicar")
         firmes = sorted((c for c in cruces if c["promesa_id"] == a.get("promesa_2023_id") and c["nivel"] == "veredicto"),
                         key=lambda c: vots[c["votacion_id"]]["fecha"])
         cruce = None
@@ -128,7 +130,8 @@ def construir(conn, raiz: Path, revision: Path | None = None, test_ciegas: Path 
     votaciones = _votaciones(conn)
     promesas = _promesas(conn)
     cruces = _cruces(conn, _confirmados(revision or raiz / "config" / "revision_manual.json"))
-    test = _test(conn, raiz, test_ciegas or raiz / "config" / "test_ciegas.json", test_anio, partidos, votaciones, cruces)
+    test_ciegas = test_ciegas or Path(os.environ.get("ELECTORAL_TEST_CIEGAS") or raiz / "config" / "test_ciegas.json")
+    test = _test(conn, raiz, test_ciegas, test_anio, partidos, votaciones, cruces)
     return {
         "meta": {
             "version_contrato": VERSION_CONTRATO,

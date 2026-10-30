@@ -231,11 +231,21 @@ def frase_cruce(veredicto: str) -> str:
     return "votó de acuerdo con su promesa" if veredicto == "cumple" else "votó en contra de su promesa"
 
 
-def generar_revision(conn, raiz: Path, anio: int, salida: Path) -> int:
+def _decididas(destino: Path, anio: int) -> tuple[list, list]:
+    """Lo que Fran ya aprobó y descartó ese año en config/test_ciegas.json."""
+    datos = json.loads(destino.read_text(encoding="utf-8")) if destino.exists() else {}
+    return datos.get(str(anio), []), datos.get("descartadas", {}).get(str(anio), [])
+
+
+def generar_revision(conn, raiz: Path, anio: int, salida: Path, destino: Path) -> int:
+    """Solo trae lo que Fran aún no ha decidido: un programa que llega tarde no reabre lo ya revisado."""
     from src.electoral import condiciones
     tabla = condiciones.cargar(raiz)
-    filas = conn.execute(FILAS.replace("SELECT t.*", "SELECT t.*, p.pagina, b.url_programa")
-                         + " AND t.resumen IS NOT NULL ORDER BY t.tema, t.partido, t.promesa_id", (anio,)).fetchall()
+    aprobadas, descartadas = _decididas(destino, anio)
+    hechas = {a["promesa_id"] for a in aprobadas} | set(descartadas)
+    filas = [f for f in conn.execute(FILAS.replace("SELECT t.*", "SELECT t.*, p.pagina, b.url_programa")
+                                     + " AND t.resumen IS NOT NULL ORDER BY t.tema, t.partido, t.promesa_id", (anio,))
+             if f["promesa_id"] not in hechas]
     cruces = _candidatos_cruce(conn, raiz, filas)
     expedientes = {r["id"]: r["expediente"] for r in conn.execute("SELECT id, expediente FROM votaciones")}
     L = [f"# Revisión del test a ciegas ({anio})", "",
@@ -263,15 +273,19 @@ def generar_revision(conn, raiz: Path, anio: int, salida: Path) -> int:
 
 
 def aprobar(conn, raiz: Path, anio: int, revision: Path, destino: Path) -> int:
-    """Lo marcado «Publicar» pasa a config/test_ciegas.json (solo se reemplaza la lista de ese año)."""
+    """Lo marcado «Publicar» se suma a config/test_ciegas.json y lo marcado «Descartar» se apunta para no volver a
+    revisarlo. Lo decidido antes se conserva (una tarjeta que se vuelve a decidir sustituye a la anterior)."""
     import re
     from datetime import date
-    aprobadas = []
+    previas, descartadas = _decididas(destino, anio)
+    aprobadas, descartes = [], []
     for tarjeta in revision.read_text(encoding="utf-8").split("\n## ")[1:]:
         pid = int(re.search(r"id=(\d+)", tarjeta).group(1))
         marcada = {c: bool(re.search(r"- \[[xX]\] " + re.escape(c), tarjeta)) for c in CASILLAS}
         if marcada["Publicar"] and marcada["Descartar"]:
             raise SystemExit(f"La tarjeta id={pid} está marcada como Publicar y Descartar a la vez")
+        if marcada["Descartar"]:
+            descartes.append(pid)
         if not marcada["Publicar"]:
             continue
         f = conn.execute("SELECT * FROM test_propuestas WHERE promesa_id = ?", (pid,)).fetchone()
@@ -281,7 +295,9 @@ def aprobar(conn, raiz: Path, anio: int, revision: Path, destino: Path) -> int:
                           "materias": json.loads(f["materias"] or "[]"), "coste": bool(f["coste"]),
                           "promesa_2023_id": int(cruce.group(1)) if cruce and marcada[CASILLAS[2]] else None,
                           "revisado_por": "Fran", "fecha": date.today().isoformat()})
+    nuevas = {a["promesa_id"] for a in aprobadas} | set(descartes)
     datos = json.loads(destino.read_text(encoding="utf-8")) if destino.exists() else {}
-    datos[str(anio)] = aprobadas
+    datos[str(anio)] = [a for a in previas if a["promesa_id"] not in nuevas] + aprobadas
+    datos.setdefault("descartadas", {})[str(anio)] = sorted((set(descartadas) - {a["promesa_id"] for a in aprobadas}) | set(descartes))
     destino.write_text(json.dumps(datos, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    return len(aprobadas)
+    return len(datos[str(anio)])

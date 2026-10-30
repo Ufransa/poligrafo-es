@@ -338,3 +338,25 @@ def test_una_promesa_solo_parecida_no_es_candidata_a_cruce(cli, zips, tmp_path):
     texto = _revision(cli, tmp_path, "2026").read_text(encoding="utf-8")
     luz = next(t for t in texto.split("\n## ") if "IVA de la luz" in t)
     assert "Posible cruce 2023" not in luz
+
+
+def test_volver_a_aprobar_no_pierde_lo_ya_decidido(cli, tmp_path):
+    """Un programa que llega tarde: la revisión nueva solo trae lo nuevo y lo aprobado antes se conserva."""
+    _resumidas(cli)
+    md = _revision(cli, tmp_path)
+    _marcar(md, 1, "Publicar", corregido="Resumen que corrigió Fran.")
+    _marcar(md, 2, "Descartar")
+    _aprobar(cli, md, tmp_path)
+    destino = tmp_path / "test_ciegas.json"
+    md2 = tmp_path / "revision2.md"
+    cli("test-revision", "--anio", "2023", "--salida", str(md2), "--destino", str(destino))
+    assert md2.read_text(encoding="utf-8").count("\n## ") == 0
+    _sembrar(cli, partido="PP", promesas=[("Bajaremos el IVA de la vivienda protegida.", "Vivienda", 0)])
+    cli("test-seleccionar", "--anio", "2023", "--temas", "Vivienda", env=_env())
+    cli("test-resumir", "--anio", "2023", env=_env())
+    cli("test-revision", "--anio", "2023", "--salida", str(md2), "--destino", str(destino))
+    assert md2.read_text(encoding="utf-8").count("\n## ") == 1
+    _marcar(md2, 1, "Publicar")
+    aprobadas = _aprobar(cli, md2, tmp_path)
+    assert len(aprobadas) == 2
+    assert "Resumen que corrigió Fran." in [a["resumen"] for a in aprobadas]

@@ -79,7 +79,7 @@ def cmd_test_neutralidad(a, conn):
 
 def cmd_test_revision(a, conn):
     salida = Path(a.salida) if a.salida else RAIZ / "docs" / f"revision_test_{a.anio}.md"
-    print(test_ciegas.generar_revision(conn, RAIZ, int(a.anio), salida), "tarjetas en", salida)
+    print(test_ciegas.generar_revision(conn, RAIZ, int(a.anio), salida, Path(a.destino)), "tarjetas en", salida)
 
 
 def cmd_test_aprobar(a, conn):
@@ -195,7 +195,9 @@ def main(argv=None):
         sub.choices[nombre].add_argument("--anio", required=True)
     sub.choices["test-revision"].add_argument("--salida", help="por defecto, docs/revision_test_<anio>.md")
     sub.choices["test-aprobar"].add_argument("--revision", required=True)
-    sub.choices["test-aprobar"].add_argument("--destino", default=str(RAIZ / "config" / "test_ciegas.json"))
+    for nombre in ("test-revision", "test-aprobar"):
+        sub.choices[nombre].add_argument("--destino", default=str(RAIZ / "config" / "test_ciegas.json"),
+                                         help="lo ya aprobado y descartado")
     sub.choices["exportar"].add_argument("--test-ciegas", help="JSON del test a ciegas aprobado (por defecto, config/test_ciegas.json)")
     sub.choices["exportar"].add_argument("--test-anio", type=int, default=2026, help="año de programas del test que se publica")
     a = p.parse_args(argv)
