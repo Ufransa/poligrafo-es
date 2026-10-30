@@ -76,7 +76,9 @@ Reglas de neutralidad (obligatorias):
 - No valores la propuesta.
 
 Además:
-- "concreta": false si el programa no dice qué se hace en concreto (solo intención general).
+- "concreta": false SOLO si no se sabe qué medida se tomaría: intenciones como «mejorar», «impulsar», «apostar
+  por», «avanzar hacia» sin decir cómo. Si se sabe qué se hace (crear un impuesto, subir un tipo, extender una
+  deducción, construir viviendas), es true aunque falten cifras, plazos o financiación.
 - "materias": claves de la lista de MATERIAS que describen lo que haría falta jurídicamente para aprobarla.
   Varias si aplica. Ninguna si no encaja ninguna.
 - "coste": true si implica gasto público o pérdida de ingresos.
