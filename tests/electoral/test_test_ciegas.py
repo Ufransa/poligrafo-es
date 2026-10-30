@@ -202,3 +202,113 @@ def test_el_cruce_2023_solo_se_guarda_si_fran_lo_confirma(cli, zips, tmp_path):
     assert _aprobar(cli, md, tmp_path, "2026")[0]["promesa_2023_id"] is None
     _marcar(md, 1, "El cruce 2023 es la misma promesa")
     assert isinstance(_aprobar(cli, md, tmp_path, "2026")[0]["promesa_2023_id"], int)
+
+
+def _aprobado(cli, tmp_path, env=None, n=1):
+    """Pipeline hasta config de test aprobada con la primera tarjeta publicada; devuelve la ruta del fichero."""
+    _seleccionadas(cli)
+    cli("test-resumir", "--anio", "2023", env=env or _env())
+    md = _revision(cli, tmp_path)
+    for i in range(1, n + 1):
+        _marcar(md, i, "Publicar")
+    _aprobar(cli, md, tmp_path)
+    return tmp_path / "test_ciegas.json"
+
+
+def _exportar(cli, fichero, anio="2023"):
+    return cli("exportar", "--test-anio", anio, "--test-ciegas", str(fichero))
+
+
+def test_lo_aprobado_sale_en_datos_json_con_sus_condiciones(cli, tmp_path):
+    datos = _exportar(cli, _aprobado(cli, tmp_path))
+    assert datos["meta"]["version_contrato"] == "1.2.0"
+    [p] = datos["test"]
+    assert p["partido"] == "PSOE" and p["partido_nombre"] and p["tema"] == "Vivienda"
+    assert p["resumen"].startswith("Resumen neutral:") and p["cita"] and p["pagina"] == 1
+    assert p["url_programa_pagina"].endswith("#page=1")
+    assert [c["etiqueta"] for c in p["condiciones"]] == ["Ley ordinaria"] and p["inviable"] is False
+    assert p["cruce_2023"] is None
+
+
+def test_sin_fichero_de_test_la_clave_es_una_lista_vacia(cli, tmp_path):
+    assert _exportar(cli, tmp_path / "no_existe.json")["test"] == []
+
+
+def test_las_condiciones_salen_de_la_tabla(cli, tmp_path):
+    tabla = json.loads((RAIZ / "config" / "condiciones.json").read_text(encoding="utf-8"))
+    env = _env(LLM_FALSO_MATERIAS='["ley_organica", "inventada"]', LLM_FALSO_COSTE_PUBLICO="1")
+    [p] = _exportar(cli, _aprobado(cli, tmp_path, env))["test"]
+    assert [c["clave"] for c in p["condiciones"]] == ["ley_organica", "coste"]
+    for c in p["condiciones"]:
+        origen = tabla["coste"] if c["clave"] == "coste" else tabla["materias"][c["clave"]]
+        assert (c["etiqueta"], c["explicacion"], c["url"]) == (origen["etiqueta"], origen["explicacion"], origen["url"])
+
+
+def test_una_competencia_compartida_nunca_es_inviable(cli, tmp_path):
+    [p] = _exportar(cli, _aprobado(cli, tmp_path, _env(LLM_FALSO_MATERIAS='["compartida_vivienda"]')))["test"]
+    assert p["inviable"] is False
+
+
+def test_lo_que_depende_de_la_ue_es_inviable(cli, tmp_path):
+    [p] = _exportar(cli, _aprobado(cli, tmp_path, _env(LLM_FALSO_MATERIAS='["ue_fiscalidad_armonizada"]')))["test"]
+    assert p["inviable"] is True
+
+
+def _con_cruce(cli, zips, tmp_path, postura="a_favor"):
+    env = _env(LLM_FALSO_TODOS="1", LLM_FALSO_POSTURA=postura)
+    cli("descargar", "--zips", zips)
+    for anio in ("2023", "2026"):
+        cli("ingest-programa", anio, "PSOE", str(FIX / "programa_prueba.pdf"), env=env)
+    cli("extraer", env=env)
+    cli("juzgar", "--k", "3", env=env)
+    cli("test-seleccionar", "--anio", "2026", "--temas", "Vivienda", env=env)
+    cli("test-resumir", "--anio", "2026", env=env)
+    return env
+
+
+def test_el_cruce_2023_usa_el_veredicto_firme_mas_reciente(cli, zips, tmp_path):
+    _con_cruce(cli, zips, tmp_path)
+    md = _revision(cli, tmp_path, "2026")
+    _marcar(md, 1, "Publicar")
+    _marcar(md, 1, "El cruce 2023 es la misma promesa")
+    [aprobada] = _aprobar(cli, md, tmp_path, "2026")
+    datos = _exportar(cli, tmp_path / "test_ciegas.json", "2026")
+    fechas = {v["id"]: v["fecha"] for v in datos["votaciones"]}
+    firmes = sorted((c for c in datos["cruces"] if c["promesa_id"] == aprobada["promesa_2023_id"] and c["nivel"] == "veredicto"),
+                    key=lambda c: fechas[c["votacion_id"]])
+    cruce = datos["test"][0]["cruce_2023"]
+    assert cruce["votacion_id"] == firmes[-1]["votacion_id"] and cruce["veredicto"] == firmes[-1]["veredicto"]
+    assert cruce["fecha"] == fechas[firmes[-1]["votacion_id"]] and cruce["expediente"]
+
+
+def test_un_incumple_sin_confirmar_no_sale_como_cruce_2023(cli, zips, tmp_path):
+    _con_cruce(cli, zips, tmp_path, postura="en_contra")
+    previa = _filas(cli.db, "SELECT id FROM promesas WHERE anio = 2023 AND texto LIKE '%alquiler%'")[0]["id"]
+    propia = _filas(cli.db, "SELECT promesa_id FROM test_propuestas WHERE anio = 2026")[0]["promesa_id"]
+    # Solo quedan los «incumple» (sin confirmar) de esa promesa: se borran sus «cumple».
+    cruces = [c for c in cli("exportar")["cruces"] if c["promesa_id"] == previa]
+    assert any(c["veredicto"] == "incumple" for c in cruces)
+    conn = sqlite3.connect(cli.db)
+    conn.executemany("DELETE FROM cruces WHERE votacion_id = ? AND promesa_id = ?",
+                     [(c["votacion_id"], previa) for c in cruces if c["veredicto"] == "cumple"])
+    conn.commit()
+    conn.close()
+    fichero = tmp_path / "test_ciegas.json"
+    fichero.write_text(json.dumps({"2026": [{"promesa_id": propia, "resumen": "r", "concreta": True, "materias": [],
+                                             "coste": False, "promesa_2023_id": previa, "revisado_por": "Fran",
+                                             "fecha": "2026-10-30"}]}), encoding="utf-8")
+    assert _exportar(cli, fichero, "2026")["test"][0]["cruce_2023"] is None
+
+
+def test_un_partido_desconocido_hace_fallar_la_exportacion(cli, tmp_path):
+    _sembrar(cli, partido="PartidoNuevo", promesas=VIVIENDA[:1])
+    cli("test-seleccionar", "--anio", "2023", "--temas", "Vivienda", env=_env())
+    cli("test-resumir", "--anio", "2023", env=_env())
+    md = _revision(cli, tmp_path)
+    _marcar(md, 1, "Publicar")
+    _aprobar(cli, md, tmp_path)
+    cmd = [sys.executable, str(RAIZ / "electoral.py"), "exportar", "--test-anio", "2023", "--test-ciegas",
+           str(tmp_path / "test_ciegas.json"), "--salida", str(tmp_path / "d.json"), "--db", str(cli.db)]
+    r = subprocess.run(cmd, cwd=RAIZ, capture_output=True, text=True, encoding="utf-8",
+                       env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+    assert r.returncode != 0 and "PartidoNuevo" in r.stderr

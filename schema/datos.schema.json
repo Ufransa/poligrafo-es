@@ -208,6 +208,58 @@
           }
         }
       }
+    },
+    "test": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "tema",
+          "resumen",
+          "concreta",
+          "condiciones",
+          "inviable",
+          "partido",
+          "partido_nombre",
+          "cita",
+          "pagina",
+          "url_programa_pagina",
+          "cruce_2023"
+        ],
+        "properties": {
+          "condiciones": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "clave",
+                "etiqueta",
+                "explicacion",
+                "norma",
+                "url",
+                "inviable"
+              ]
+            }
+          },
+          "url_programa_pagina": {
+            "type": "string",
+            "minLength": 1
+          },
+          "cruce_2023": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "required": [
+              "veredicto",
+              "votacion_id",
+              "expediente",
+              "fecha"
+            ]
+          }
+        }
+      }
     }
   }
 }

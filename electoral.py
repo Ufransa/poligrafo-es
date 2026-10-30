@@ -148,7 +148,8 @@ def cmd_noche(a, conn):
 
 
 def cmd_exportar(a, conn):
-    exportar.escribir(exportar.construir(conn, RAIZ, Path(a.revision) if a.revision else None), Path(a.salida))
+    exportar.escribir(exportar.construir(conn, RAIZ, Path(a.revision) if a.revision else None,
+                                       Path(a.test_ciegas) if a.test_ciegas else None, a.test_anio), Path(a.salida))
 
 
 def main(argv=None):
@@ -193,6 +194,8 @@ def main(argv=None):
     sub.choices["test-revision"].add_argument("--salida", help="por defecto, docs/revision_test_<anio>.md")
     sub.choices["test-aprobar"].add_argument("--revision", required=True)
     sub.choices["test-aprobar"].add_argument("--destino", default=str(RAIZ / "config" / "test_ciegas.json"))
+    sub.choices["exportar"].add_argument("--test-ciegas", help="JSON del test a ciegas aprobado (por defecto, config/test_ciegas.json)")
+    sub.choices["exportar"].add_argument("--test-anio", type=int, default=2026, help="año de programas del test que se publica")
     a = p.parse_args(argv)
     conn = edb.conectar(Path(a.db))
     {"descargar": cmd_descargar, "ingest-programa": cmd_ingest, "extraer": cmd_extraer, "juzgar": cmd_juzgar, "fuentes": cmd_fuentes, "muestra": cmd_muestra, "todo": cmd_todo,
