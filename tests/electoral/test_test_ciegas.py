@@ -161,6 +161,15 @@ def _aprobar(cli, md, tmp_path, anio="2023", ok=True):
     return json.loads(destino.read_text(encoding="utf-8"))[anio] if ok else r.stderr
 
 
+def test_una_propuesta_de_un_solo_territorio_no_llega_ni_al_adivino_ni_a_la_revision(cli, tmp_path):
+    """Son generales: beneficiar a un solo territorio no entra en el test (Fran, 2026-10-31)."""
+    _seleccionadas(cli)
+    cli("test-resumir", "--anio", "2023", env=_env(LLM_FALSO_TERRITORIAL="1"))
+    cli("test-neutralidad", "--anio", "2023", env=_env(LLM_FALSO_ADIVINA="acierta", LLM_FALSO_PISTA="forma"))
+    assert all(f["adivinado"] is None for f in _filas(cli.db, "SELECT adivinado FROM test_propuestas"))
+    assert "\n## " not in _revision(cli, tmp_path).read_text(encoding="utf-8")
+
+
 def test_la_revision_lleva_resumen_condiciones_y_cita(cli, tmp_path):
     _resumidas(cli)
     texto = _revision(cli, tmp_path).read_text(encoding="utf-8")

@@ -43,7 +43,8 @@ def transporte(body):
         promesa = usuario.split("PROMESA: ")[1].split("\n")[0]
         return _resp({"resumen": f"Resumen neutral: {promesa}", "concreta": True,
                       "materias": json.loads(os.environ.get("LLM_FALSO_MATERIAS", '["ley_ordinaria"]')),
-                      "coste": bool(os.environ.get("LLM_FALSO_COSTE_PUBLICO"))})
+                      "coste": bool(os.environ.get("LLM_FALSO_COSTE_PUBLICO")),
+                      "territorial": bool(os.environ.get("LLM_FALSO_TERRITORIAL"))})
     if EXCEPCION and "FRAGMENTO:" not in usuario:
         import requests
         raise requests.ConnectionError("red caída (simulada)")

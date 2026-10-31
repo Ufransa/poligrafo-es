@@ -64,5 +64,9 @@ def conectar(ruta: Path) -> sqlite3.Connection:
         conn.execute("ALTER TABLE test_propuestas ADD COLUMN pista TEXT")
     except sqlite3.OperationalError:
         pass
+    try:                                          # solo afecta a un territorio: fuera del test (Fran, 2026-10-31)
+        conn.execute("ALTER TABLE test_propuestas ADD COLUMN territorial INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
     conn.execute("CREATE TABLE IF NOT EXISTS boe (clave TEXT PRIMARY KEY, identificador TEXT)")
     return conn

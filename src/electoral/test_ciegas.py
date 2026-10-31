@@ -18,6 +18,10 @@ de qué partido son. De la lista, elige como mucho {MAX_POR_PARTIDO_TEMA}: las m
 y de MÁS ALCANCE (a cuánta gente afecta o cuánto cambia). Si hay {MAX_POR_PARTIDO_TEMA} o menos, elígelas todas.
 No valores si son buenas o malas.
 
+Son elecciones generales: descarta las propuestas que solo afectan a un territorio concreto (una comunidad
+autónoma, provincia, isla o ciudad, sus instituciones propias o su régimen foral o fiscal especial), aunque sean
+concretas. Si todas son de ese tipo, responde con la lista vacía.
+
 Responde SOLO con JSON: {{"ids": [int, ...]}}"""
 
 
@@ -82,8 +86,12 @@ Además:
 - "materias": claves de la lista de MATERIAS que describen lo que haría falta jurídicamente para aprobarla.
   Varias si aplica. Ninguna si no encaja ninguna.
 - "coste": true si implica gasto público o pérdida de ingresos.
+- "territorial": true si solo afecta a un territorio concreto (una comunidad autónoma, provincia, isla o ciudad,
+  sus instituciones propias o su régimen foral o fiscal especial), mírese en el texto, la cita o el contexto.
+  Una medida para todo el país es false aunque la proponga un partido de un solo territorio o venga en otra
+  lengua: cuenta a quién beneficia la medida, no quién la propone.
 
-Responde SOLO con JSON: {"resumen": str, "concreta": bool, "materias": [str], "coste": bool}"""
+Responde SOLO con JSON: {"resumen": str, "concreta": bool, "materias": [str], "coste": bool, "territorial": bool}"""
 
 
 def materias_validas(raiz: Path) -> dict:
@@ -102,9 +110,10 @@ def _resumir_una(conn, llm, fila, materias: dict, pista: str | None = None) -> b
     if not out or not str(out.get("resumen", "")).strip():
         return False
     elegidas = [m for m in dict.fromkeys(out.get("materias") or []) if m in materias]
-    conn.execute("UPDATE test_propuestas SET resumen = ?, concreta = ?, materias = ?, coste = ? WHERE promesa_id = ?",
+    conn.execute("UPDATE test_propuestas SET resumen = ?, concreta = ?, materias = ?, coste = ?, territorial = ? "
+                 "WHERE promesa_id = ?",
                  (out["resumen"].strip(), int(out.get("concreta") is not False), json.dumps(elegidas),
-                  int(bool(out.get("coste"))), fila["promesa_id"]))
+                  int(bool(out.get("coste"))), int(out.get("territorial") is True), fila["promesa_id"]))
     return True
 
 
@@ -146,7 +155,7 @@ def neutralidad(conn, llm, anio: int, raiz: Path) -> dict:
     adivinar la propuesta misma: no se toca (Fran, 2026-10-30). Reanudable."""
     materias = materias_validas(raiz)
     partidos = [r["partido"] for r in conn.execute("SELECT DISTINCT partido FROM promesas WHERE anio = ? ORDER BY partido", (anio,))]
-    pendientes = conn.execute(FILAS + " AND t.resumen IS NOT NULL AND t.adivinado IS NULL", (anio,)).fetchall()
+    pendientes = conn.execute(FILAS + " AND t.resumen IS NOT NULL AND t.adivinado IS NULL AND NOT t.territorial", (anio,)).fetchall()
 
     def adivinar(resumen):
         out = llm.json(ADIVINO, SISTEMA_ADIVINO, f"Partidos: {', '.join(partidos)}\n\nADIVINAR:\n{resumen}", max_tokens=150) or {}
@@ -244,7 +253,7 @@ def generar_revision(conn, raiz: Path, anio: int, salida: Path, destino: Path) -
     aprobadas, descartadas = _decididas(destino, anio)
     hechas = {a["promesa_id"] for a in aprobadas} | set(descartadas)
     filas = [f for f in conn.execute(FILAS.replace("SELECT t.*", "SELECT t.*, p.pagina, b.url_programa")
-                                     + " AND t.resumen IS NOT NULL ORDER BY t.tema, t.partido, t.promesa_id", (anio,))
+                                     + " AND t.resumen IS NOT NULL AND NOT t.territorial ORDER BY t.tema, t.partido, t.promesa_id", (anio,))
              if f["promesa_id"] not in hechas]
     cruces = _candidatos_cruce(conn, raiz, filas)
     expedientes = {r["id"]: r["expediente"] for r in conn.execute("SELECT id, expediente FROM votaciones")}
