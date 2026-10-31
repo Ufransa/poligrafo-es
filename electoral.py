@@ -142,13 +142,26 @@ def cmd_todo(a, conn):
         main([paso, *args, "--db", a.db])
 
 
+def _mezclas_de_la_noche(a) -> str | None:
+    """Normas nuevas que mezclan asuntos. Si falla, no tumba la publicación: avisa por Telegram y queda en la salud."""
+    try:
+        main(["mezclas", "--tope", "0.05", *(["--boe", a.boe] if a.boe else []), "--db", a.db])
+        return None
+    except (Exception, SystemExit) as e:
+        aviso = f"mezclas: {type(e).__name__}: {e}"[:300]
+        noche._enviar(f"<b>PolígrafoES</b>: esta noche falló la revisión de normas que mezclan asuntos ({aviso}). "
+                      "La web se publica igual; mañana se reintenta.")
+        return aviso
+
+
 def cmd_noche(a, conn):
     """Pasos del motor y, al final, aviso y publicación. La salud se escribe siempre, también si algo falla."""
-    avisos, error = 0, None
+    avisos, error, aviso = 0, None, None
     try:
         main(["descargar", *(["--zips", a.zips] if a.zips else []), "--db", a.db])
         main(["fuentes", *(["--iniciativas", a.iniciativas] if a.iniciativas else []),
               *(["--boe", a.boe] if a.boe else []), "--db", a.db])
+        aviso = _mezclas_de_la_noche(a)
         main(["juzgar", "--tope", str(a.tope), "--db", a.db])
         main(["exportar", "--salida", a.salida, "--db", a.db])
         datos = json.loads(Path(a.salida).read_text(encoding="utf-8"))
@@ -156,7 +169,7 @@ def cmd_noche(a, conn):
         noche.publicar(Path(a.salida), Path(a.web))
     except Exception as e:                       # la salud lo cuenta y ARGUS avisa
         error = f"{type(e).__name__}: {getattr(e, 'stderr', '') or e}"[:500]
-    noche.escribir_salud(Path(a.salud), error is None, avisos, error)
+    noche.escribir_salud(Path(a.salud), error is None, avisos, error, aviso)
     if error:
         raise SystemExit(f"noche: {error}")
 

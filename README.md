@@ -58,7 +58,8 @@ Votar contra una norma puede deberse a algo que se coló dentro y no tiene que v
 - Si el título de la norma ya confiesa la mezcla («y otras medidas», «otra normativa»), el cruce lleva una nota.
 - `python electoral.py mezclas --tope 0.1` lee en el BOE los artículos y disposiciones de cada norma votada y el
   modelo barato dice si toca asuntos ajenos a su título; esas normas también llevan la nota (campo `mezcla` de cada
-  votación, contrato 1.3.0). Se lanza a mano cuando entran leyes nuevas; una norma ya mirada no se vuelve a pagar.
+  votación, contrato 1.3.0). La noche lo lanza solo con tope de 0,05 $; una norma ya mirada no se vuelve a pagar.
+  Si falla, la noche publica igual, avisa por Telegram y lo anota como `aviso` en `noche.json`.
   Medición del 2026-10-31: 13 de 27 normas marcadas, de las que unas 2 eran falsos positivos.
 
 ### Qué no mide

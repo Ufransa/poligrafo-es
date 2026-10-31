@@ -56,8 +56,9 @@ def publicar(datos_json: Path, web: Path) -> None:
     git("push", "origin", "HEAD")
 
 
-def escribir_salud(ruta: Path, publicado: bool, avisos: int, error: str | None) -> None:
+def escribir_salud(ruta: Path, publicado: bool, avisos: int, error: str | None, aviso: str | None = None) -> None:
     ruta.parent.mkdir(parents=True, exist_ok=True)
     ruta.write_text(json.dumps({"written_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                                "publicado": publicado, "avisos": avisos, "error": error}, ensure_ascii=False),
+                                "publicado": publicado, "avisos": avisos, "error": error,
+                                "aviso": aviso}, ensure_ascii=False),
                     encoding="utf-8")

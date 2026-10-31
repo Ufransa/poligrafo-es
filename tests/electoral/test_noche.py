@@ -118,3 +118,31 @@ def test_un_partido_desconocido_en_el_test_queda_en_la_salud(tmp_path, zips):
     assert r.returncode != 0
     salud = json.loads((tmp_path / "noche.json").read_text(encoding="utf-8"))
     assert salud["publicado"] is False and "PartidoNuevo" in salud["error"]
+
+
+def _texto_boe(tmp_path):
+    texto = tmp_path / "texto.json"
+    texto.write_text(json.dumps({"BOE-A-2026-2548": [
+        "Artículo 1. Revalorización de las pensiones.", "Disposición final primera. Cesión de un palacio en París."]}),
+        encoding="utf-8")
+    return texto
+
+
+def test_la_noche_marca_las_normas_que_mezclan_asuntos(tmp_path, zips):
+    remoto, clon = _web(tmp_path)
+    r = _noche(tmp_path, zips, clon, tmp_path / "avisos.jsonl",
+               ELECTORAL_BOE_TEXTO_FALSO=str(_texto_boe(tmp_path)), LLM_FALSO_MEZCLA="1")
+    assert r.returncode == 0, r.stderr
+    publicado = json.loads(_git("show", "main:data/datos.json", cwd=remoto))
+    assert any("palacio" in (v["mezcla"] or {}).get("motivo", "") for v in publicado["votaciones"])
+
+
+def test_si_falla_lo_de_las_mezclas_la_noche_publica_igual_y_avisa(tmp_path, zips):
+    remoto, clon = _web(tmp_path)
+    avisos = tmp_path / "avisos.jsonl"
+    r = _noche(tmp_path, zips, clon, avisos, ELECTORAL_BOE_TEXTO_FALSO=str(tmp_path / "no_existe.json"))
+    assert r.returncode == 0, r.stderr
+    assert json.loads(_git("show", "main:data/datos.json", cwd=remoto))["votaciones"]
+    salud = json.loads((tmp_path / "noche.json").read_text(encoding="utf-8"))
+    assert salud["publicado"] is True and "mezclas" in salud["aviso"]
+    assert any("mezclan asuntos" in json.loads(x)["texto"] for x in avisos.read_text(encoding="utf-8").splitlines())
