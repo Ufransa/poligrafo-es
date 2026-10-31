@@ -1,5 +1,7 @@
 # src/electoral/exportar.py
 import json
+import os
+import sys
 
 import jsonschema
 from collections import Counter, defaultdict
@@ -8,7 +10,7 @@ from pathlib import Path
 
 from src.electoral import analisis
 
-VERSION_CONTRATO = "1.1.0"
+VERSION_CONTRATO = "1.2.0"
 
 
 def _votaciones(conn) -> list[dict]:
@@ -86,11 +88,50 @@ def _confirmados(ruta: Path) -> set:
     return {(x["votacion_id"], x["promesa_id"], x["partido"], x["veredicto"]) for x in datos["confirmados"]}
 
 
-def construir(conn, raiz: Path, revision: Path | None = None) -> dict:
+def _test(conn, raiz: Path, ruta: Path, anio: int, partidos: list, votaciones: list, cruces: list) -> list[dict]:
+    """Propuestas del test a ciegas aprobadas por Fran (config/test_ciegas.json), con sus condiciones y, si Fran
+    confirmó el cruce, el veredicto firme más reciente de esa promesa en 2023."""
+    from src.electoral import condiciones
+    if not ruta.exists():
+        return []
+    aprobadas = json.loads(ruta.read_text(encoding="utf-8")).get(str(anio), [])
+    tabla = condiciones.cargar(raiz)
+    nombres = {p["id"]: p["nombre"] for p in partidos}
+    vots = {v["id"]: v for v in votaciones}
+    salida = []
+    for a in aprobadas:
+        p = conn.execute("SELECT p.*, b.url_programa FROM promesas p JOIN bloques b ON b.id = p.bloque_id WHERE p.id = ?",
+                         (a["promesa_id"],)).fetchone()
+        if p is None:
+            print(f"aviso: la propuesta aprobada {a['promesa_id']} ya no está en la base; no se publica", file=sys.stderr)
+            continue
+        if p["partido"] not in nombres:
+            # ValueError y no SystemExit: la noche lo captura y lo deja en la salud que vigila ARGUS.
+            raise ValueError(f"El partido {p['partido']} no está en config/partidos_electoral.json: añádelo antes de publicar")
+        firmes = sorted((c for c in cruces if c["promesa_id"] == a.get("promesa_2023_id") and c["nivel"] == "veredicto"),
+                        key=lambda c: vots[c["votacion_id"]]["fecha"])
+        cruce = None
+        if firmes:
+            v = vots[firmes[-1]["votacion_id"]]
+            cruce = {"veredicto": firmes[-1]["veredicto"], "votacion_id": v["id"], "expediente": v["expediente"],
+                     "fecha": v["fecha"], "url_sesion": v["url_sesion"]}
+        cond = condiciones.resolver(a["materias"], a["coste"], tabla)
+        salida.append({"id": p["id"], "tema": p["tema"], "resumen": a["resumen"], "concreta": a["concreta"],
+                       "condiciones": cond["condiciones"], "inviable": cond["inviable"],
+                       "partido": p["partido"], "partido_nombre": nombres[p["partido"]], "cita": p["cita"],
+                       "pagina": p["pagina"], "url_programa_pagina": f"{p['url_programa']}#page={p['pagina']}",
+                       "cruce_2023": cruce})
+    return salida
+
+
+def construir(conn, raiz: Path, revision: Path | None = None, test_ciegas: Path | None = None,
+              test_anio: int = 2026) -> dict:
     partidos = json.loads((raiz / "config" / "partidos_electoral.json").read_text(encoding="utf-8"))
     votaciones = _votaciones(conn)
     promesas = _promesas(conn)
     cruces = _cruces(conn, _confirmados(revision or raiz / "config" / "revision_manual.json"))
+    test_ciegas = test_ciegas or Path(os.environ.get("ELECTORAL_TEST_CIEGAS") or raiz / "config" / "test_ciegas.json")
+    test = _test(conn, raiz, test_ciegas, test_anio, partidos, votaciones, cruces)
     return {
         "meta": {
             "version_contrato": VERSION_CONTRATO,
@@ -107,6 +148,7 @@ def construir(conn, raiz: Path, revision: Path | None = None) -> dict:
         "coherencia": analisis.coherencia(conn),
         "gobierno": analisis.gobierno(conn, partidos),
         "finanzas": analisis.finanzas(raiz),
+        "test": test,
     }
 
 

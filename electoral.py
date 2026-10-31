@@ -7,7 +7,7 @@ from pathlib import Path
 from src.electoral import db as edb
 import json
 
-from src.electoral import exportar, fuentes, juez, noche, programas, votaciones
+from src.electoral import exportar, fuentes, juez, noche, programas, test_ciegas, votaciones
 from src.electoral.llm import LLM
 
 RAIZ = Path(__file__).resolve().parent
@@ -46,6 +46,44 @@ def cmd_juzgar(a, conn):
         conn.execute("INSERT INTO gasto (fecha, paso, usd) VALUES (datetime('now'), 'juzgar', ?)", (llm.gastado,))
         conn.commit()
         print(f"gastado {llm.gastado:.4f} $")
+
+
+def _con_gasto(paso, a, conn, fn):
+    """Ejecuta un paso con LLM y registra lo gastado aunque falle."""
+    llm = LLM(a.tope)
+    try:
+        return fn(llm)
+    finally:
+        conn.execute("INSERT INTO gasto (fecha, paso, usd) VALUES (datetime('now'), ?, ?)", (paso, llm.gastado))
+        conn.commit()
+        print(f"gastado {llm.gastado:.4f} $")
+
+
+def cmd_test_seleccionar(a, conn):
+    temas = a.temas.split(",") if a.temas else test_ciegas.TEMAS_LANZAMIENTO
+    n = _con_gasto("test-seleccionar", a, conn, lambda llm: test_ciegas.seleccionar(conn, llm, int(a.anio), temas))
+    print(n, "propuestas seleccionadas")
+
+
+def cmd_test_resumir(a, conn):
+    print(_con_gasto("test-resumir", a, conn, lambda llm: test_ciegas.resumir(conn, llm, int(a.anio), RAIZ)), "resumidas")
+
+
+def cmd_test_neutralidad(a, conn):
+    r = _con_gasto("test-neutralidad", a, conn, lambda llm: test_ciegas.neutralidad(conn, llm, int(a.anio), RAIZ))
+    pct = 100 * r["acertadas_al_final"] / r["total"] if r["total"] else 0
+    forma = 100 * r["delata"] / r["total"] if r["total"] else 0
+    print(f"fugas de forma: {r['delata']} de {r['total']} ({forma:.0f} %)")
+    print(f"acierto final: {r['acertadas_al_final']} de {r['total']} ({pct:.0f} %)")
+
+
+def cmd_test_revision(a, conn):
+    salida = Path(a.salida) if a.salida else RAIZ / "docs" / f"revision_test_{a.anio}.md"
+    print(test_ciegas.generar_revision(conn, RAIZ, int(a.anio), salida, Path(a.destino)), "tarjetas en", salida)
+
+
+def cmd_test_aprobar(a, conn):
+    print(test_ciegas.aprobar(conn, RAIZ, int(a.anio), Path(a.revision), Path(a.destino)), "aprobadas")
 
 
 def cmd_fuentes(a, conn):
@@ -112,13 +150,16 @@ def cmd_noche(a, conn):
 
 
 def cmd_exportar(a, conn):
-    exportar.escribir(exportar.construir(conn, RAIZ, Path(a.revision) if a.revision else None), Path(a.salida))
+    exportar.escribir(exportar.construir(conn, RAIZ, Path(a.revision) if a.revision else None,
+                                       Path(a.test_ciegas) if a.test_ciegas else None, a.test_anio), Path(a.salida))
 
 
 def main(argv=None):
     p = argparse.ArgumentParser(prog="electoral")
     sub = p.add_subparsers(dest="cmd", required=True)
-    for nombre in ("descargar", "fuentes", "ingest-programa", "extraer", "juzgar", "exportar", "muestra", "todo", "noche"):
+    for nombre in ("descargar", "fuentes", "ingest-programa", "extraer", "juzgar", "exportar", "muestra", "todo", "noche",
+                   "test-seleccionar", "test-resumir", "test-neutralidad",
+                   "test-revision", "test-aprobar"):
         s = sub.add_parser(nombre)
         s.add_argument("--db", default=str(RAIZ / "electoral.db"))
     for arg in ("anio", "partido", "origen"):
@@ -143,10 +184,29 @@ def main(argv=None):
     sub.choices["noche"].add_argument("--salida", default=str(RAIZ / "datos.json"))
     sub.choices["noche"].add_argument("--salud", default=str(RAIZ / "electoral_data" / "noche.json"))
     sub.choices["exportar"].add_argument("--revision", help="JSON con los cruces confirmados a mano (por defecto, config/revision_manual.json)")
+    sub.choices["test-seleccionar"].add_argument("--anio", required=True)
+    sub.choices["test-seleccionar"].add_argument("--temas", help="separados por comas (por defecto, los del lanzamiento)")
+    sub.choices["test-seleccionar"].add_argument("--tope", type=float, default=0.1)
+    sub.choices["test-resumir"].add_argument("--anio", required=True)
+    sub.choices["test-resumir"].add_argument("--tope", type=float, default=0.3)
+    sub.choices["test-neutralidad"].add_argument("--anio", required=True)
+    sub.choices["test-neutralidad"].add_argument("--tope", type=float, default=0.3)
+    for nombre in ("test-revision", "test-aprobar"):
+        sub.choices[nombre].add_argument("--anio", required=True)
+    sub.choices["test-revision"].add_argument("--salida", help="por defecto, docs/revision_test_<anio>.md")
+    sub.choices["test-aprobar"].add_argument("--revision", required=True)
+    for nombre in ("test-revision", "test-aprobar"):
+        sub.choices[nombre].add_argument("--destino", default=str(RAIZ / "config" / "test_ciegas.json"),
+                                         help="lo ya aprobado y descartado")
+    sub.choices["exportar"].add_argument("--test-ciegas", help="JSON del test a ciegas aprobado (por defecto, config/test_ciegas.json)")
+    sub.choices["exportar"].add_argument("--test-anio", type=int, default=2026, help="año de programas del test que se publica")
     a = p.parse_args(argv)
     conn = edb.conectar(Path(a.db))
     {"descargar": cmd_descargar, "ingest-programa": cmd_ingest, "extraer": cmd_extraer, "juzgar": cmd_juzgar, "fuentes": cmd_fuentes, "muestra": cmd_muestra, "todo": cmd_todo,
-     "exportar": cmd_exportar, "noche": cmd_noche}[a.cmd](a, conn)
+     "exportar": cmd_exportar, "noche": cmd_noche,
+     "test-seleccionar": cmd_test_seleccionar, "test-resumir": cmd_test_resumir,
+     "test-neutralidad": cmd_test_neutralidad,
+     "test-revision": cmd_test_revision, "test-aprobar": cmd_test_aprobar}[a.cmd](a, conn)
 
 
 if __name__ == "__main__":

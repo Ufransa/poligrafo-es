@@ -30,6 +30,21 @@ def transporte(body):
         if os.environ.get("LLM_FALSO_CITA_FALSA"):
             promesas.append({"promesa": "Promesa inventada", "cita": "Esta frase no aparece en ningún programa", "tema": "Vivienda", "procedimental": False})
         return _resp({"promesas": promesas})
+    if "SELECCIONAR:" in usuario:                     # test a ciegas: selección
+        ids = [int(i) for i in re.findall(r"\[id=(\d+)\]", usuario)]
+        modo = os.environ.get("LLM_FALSO_SELECCION", "")
+        return _resp({"ids": ids if modo == "todos" else [99999] if modo == "inventa" else ids[:3]})
+    if "ADIVINAR:" in usuario:                        # test a ciegas: ¿de qué partido es este resumen?
+        if os.environ.get("LLM_FALSO_FALLA_SI_VE_PROGRAMA") and ("CITA" in usuario or "TEXTO DEL PROGRAMA" in usuario):
+            return {"choices": [{"message": {"content": "no es json"}}], "usage": {"cost": COSTE}}
+        return _resp({"partido": "PSOE" if os.environ.get("LLM_FALSO_ADIVINA") == "acierta" else "PP",
+                      "pista": os.environ.get("LLM_FALSO_PISTA", "forma"), "por_que": "prueba"})
+    if "RESUMIR:" in usuario:                         # test a ciegas: resumen neutral
+        promesa = usuario.split("PROMESA: ")[1].split("\n")[0]
+        return _resp({"resumen": f"Resumen neutral: {promesa}", "concreta": True,
+                      "materias": json.loads(os.environ.get("LLM_FALSO_MATERIAS", '["ley_ordinaria"]')),
+                      "coste": bool(os.environ.get("LLM_FALSO_COSTE_PUBLICO")),
+                      "territorial": bool(os.environ.get("LLM_FALSO_TERRITORIAL"))})
     if EXCEPCION and "FRAGMENTO:" not in usuario:
         import requests
         raise requests.ConnectionError("red caída (simulada)")
