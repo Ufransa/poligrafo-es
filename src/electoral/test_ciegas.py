@@ -2,7 +2,11 @@
 """Test a ciegas: propuestas de un programa, resumidas sin delatar al partido y con sus condiciones jurídicas.
 Ver docs/superpowers/specs/2026-10-30-test-a-ciegas-design.md."""
 import json
+import threading
 from concurrent.futures import ThreadPoolExecutor
+
+# Los hilos comparten una conexión SQLite: cada uso, de uno en uno (sin esto, «bad parameter or other API misuse»).
+_BD = threading.Lock()
 from pathlib import Path
 
 from src.electoral.llm import PresupuestoAgotado
@@ -110,10 +114,11 @@ def _resumir_una(conn, llm, fila, materias: dict, pista: str | None = None) -> b
     if not out or not str(out.get("resumen", "")).strip():
         return False
     elegidas = [m for m in dict.fromkeys(out.get("materias") or []) if m in materias]
-    conn.execute("UPDATE test_propuestas SET resumen = ?, concreta = ?, materias = ?, coste = ?, territorial = ? "
-                 "WHERE promesa_id = ?",
-                 (out["resumen"].strip(), int(out.get("concreta") is not False), json.dumps(elegidas),
-                  int(bool(out.get("coste"))), int(out.get("territorial") is True), fila["promesa_id"]))
+    with _BD:
+        conn.execute("UPDATE test_propuestas SET resumen = ?, concreta = ?, materias = ?, coste = ?, territorial = ? "
+                     "WHERE promesa_id = ?",
+                     (out["resumen"].strip(), int(out.get("concreta") is not False), json.dumps(elegidas),
+                      int(bool(out.get("coste"))), int(out.get("territorial") is True), fila["promesa_id"]))
     return True
 
 
@@ -171,15 +176,18 @@ def neutralidad(conn, llm, anio: int, raiz: Path) -> dict:
                                                            "quítalo sin cambiar el fondo de la medida"):
                     break
                 f["reescrituras"] += 1
-                f["resumen"] = conn.execute("SELECT resumen FROM test_propuestas WHERE promesa_id = ?", (f["promesa_id"],)).fetchone()[0]
+                with _BD:
+                    f["resumen"] = conn.execute("SELECT resumen FROM test_propuestas WHERE promesa_id = ?",
+                                                (f["promesa_id"],)).fetchone()[0]
                 adivinado, pista = adivinar(f["resumen"])
         except PresupuestoAgotado:
             return
         if adivinado is None:
             return
         delata = adivinado == f["partido"] and pista.startswith("forma")
-        conn.execute("UPDATE test_propuestas SET adivinado = ?, pista = ?, reescrituras = ?, delata = ? WHERE promesa_id = ?",
-                     (adivinado, pista, f["reescrituras"], int(delata), f["promesa_id"]))
+        with _BD:
+            conn.execute("UPDATE test_propuestas SET adivinado = ?, pista = ?, reescrituras = ?, delata = ? WHERE promesa_id = ?",
+                         (adivinado, pista, f["reescrituras"], int(delata), f["promesa_id"]))
 
     with ThreadPoolExecutor(8) as ex:
         list(ex.map(una, pendientes))

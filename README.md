@@ -50,6 +50,17 @@ fueron correctos según la revisión de su autor. La prueba `pytest -m llm` los 
 reales y exige **cero veredictos al revés** y al menos 16 de 19 que sigan siendo veredicto. Además, cada carga
 completa genera una muestra de 30 veredictos al azar que se revisa antes de publicar.
 
+### Normas que mezclan asuntos
+
+Votar contra una norma puede deberse a algo que se coló dentro y no tiene que ver con la promesa:
+
+- Una **enmienda suelta del Senado** nunca da veredicto firme: queda en «juzga tú».
+- Si el título de la norma ya confiesa la mezcla («y otras medidas», «otra normativa»), el cruce lleva una nota.
+- `python electoral.py mezclas --tope 0.1` lee en el BOE los artículos y disposiciones de cada norma votada y el
+  modelo barato dice si toca asuntos ajenos a su título; esas normas también llevan la nota (campo `mezcla` de cada
+  votación, contrato 1.3.0). Se lanza a mano cuando entran leyes nuevas; una norma ya mirada no se vuelve a pagar.
+  Medición del 2026-10-31: 13 de 27 normas marcadas, de las que unas 2 eran falsos positivos.
+
 ### Qué no mide
 
 - **Corrupción**: no hay una fuente de verdad fiable y completa; los titulares tienen sesgo de selección.
