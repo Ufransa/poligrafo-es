@@ -7,7 +7,7 @@ from pathlib import Path
 from src.electoral import db as edb
 import json
 
-from src.electoral import exportar, fuentes, juez, noche, programas, test_ciegas, votaciones
+from src.electoral import exportar, fuentes, juez, mezclas, noche, programas, test_ciegas, votaciones
 from src.electoral.llm import LLM
 
 RAIZ = Path(__file__).resolve().parent
@@ -103,6 +103,18 @@ def cmd_fuentes(a, conn):
     conn.commit()
 
 
+def cmd_mezclas(a, conn):
+    if a.boe:
+        boe = json.loads(Path(a.boe).read_text(encoding="utf-8"))
+        conn.executemany("INSERT OR REPLACE INTO boe VALUES (?, ?)", boe.items())
+        conn.commit()
+    else:
+        boe = {r["clave"]: r["identificador"] for r in conn.execute("SELECT * FROM boe WHERE identificador IS NOT NULL")}
+    r = _con_gasto("mezclas", a, conn, lambda llm: mezclas.revisar(conn, llm, boe))
+    pct = 100 * r["mezclan"] / r["total"] if r["total"] else 0
+    print(f"{r['mezclan']} de {r['total']} normas mezclan asuntos ({pct:.0f} %)")
+
+
 def cmd_muestra(a, conn):
     datos = exportar.construir(conn, RAIZ)
     prom = {p["id"]: p for p in datos["promesas"]}
@@ -157,7 +169,7 @@ def cmd_exportar(a, conn):
 def main(argv=None):
     p = argparse.ArgumentParser(prog="electoral")
     sub = p.add_subparsers(dest="cmd", required=True)
-    for nombre in ("descargar", "fuentes", "ingest-programa", "extraer", "juzgar", "exportar", "muestra", "todo", "noche",
+    for nombre in ("descargar", "fuentes", "ingest-programa", "extraer", "juzgar", "exportar", "muestra", "todo", "noche", "mezclas",
                    "test-seleccionar", "test-resumir", "test-neutralidad",
                    "test-revision", "test-aprobar"):
         s = sub.add_parser(nombre)
@@ -168,6 +180,8 @@ def main(argv=None):
     sub.choices["juzgar"].add_argument("--tope", type=float, default=4.0)
     sub.choices["juzgar"].add_argument("--k", type=int, default=20)
     sub.choices["fuentes"].add_argument("--iniciativas", help="JSON con iniciativas (por defecto, open data del Congreso)")
+    sub.choices["mezclas"].add_argument("--tope", type=float, default=0.1)
+    sub.choices["mezclas"].add_argument("--boe", help="JSON clave -> identificador BOE (por defecto, la tabla boe)")
     sub.choices["muestra"].add_argument("--n", type=int, default=30)
     sub.choices["muestra"].add_argument("--semilla", type=int, default=29)
     sub.choices["muestra"].add_argument("--salida", default=str(RAIZ / "docs" / "revision_muestra.md"))
@@ -203,7 +217,7 @@ def main(argv=None):
     a = p.parse_args(argv)
     conn = edb.conectar(Path(a.db))
     {"descargar": cmd_descargar, "ingest-programa": cmd_ingest, "extraer": cmd_extraer, "juzgar": cmd_juzgar, "fuentes": cmd_fuentes, "muestra": cmd_muestra, "todo": cmd_todo,
-     "exportar": cmd_exportar, "noche": cmd_noche,
+     "exportar": cmd_exportar, "noche": cmd_noche, "mezclas": cmd_mezclas,
      "test-seleccionar": cmd_test_seleccionar, "test-resumir": cmd_test_resumir,
      "test-neutralidad": cmd_test_neutralidad,
      "test-revision": cmd_test_revision, "test-aprobar": cmd_test_aprobar}[a.cmd](a, conn)

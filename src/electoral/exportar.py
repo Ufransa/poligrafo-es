@@ -8,9 +8,9 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-from src.electoral import analisis
+from src.electoral import analisis, mezclas
 
-VERSION_CONTRATO = "1.2.0"
+VERSION_CONTRATO = "1.3.0"
 
 
 def _votaciones(conn) -> list[dict]:
@@ -26,6 +26,7 @@ def _votaciones(conn) -> list[dict]:
             "abstenciones": v["abstenciones"], "excluida_tramite": bool(v["excluida_tramite"]),
             "votos": votos, "url_xml": v["url_xml"], "url_sesion": v["url_sesion"],
             "url_bocg": v["url_bocg"], "url_boe": v["url_boe"],
+            "mezcla": mezclas.nota(conn, v),
         })
     return salida
 
@@ -56,7 +57,7 @@ def _cruces(conn, confirmados: set) -> list[dict]:
     veredictos obsoletos."""
     from src.electoral import juez
     salida = []
-    for c in conn.execute("""SELECT c.*, vp.voto, vp.dividido, v.subtipo FROM cruces c
+    for c in conn.execute("""SELECT c.*, vp.voto, vp.dividido, v.subtipo, v.tipo, v.expediente FROM cruces c
                              JOIN votos_partido vp ON vp.votacion_id = c.votacion_id AND vp.partido = c.partido
                              JOIN votaciones v ON v.id = c.votacion_id AND v.excluida_tramite = 0
                              ORDER BY c.votacion_id, c.partido"""):
@@ -67,6 +68,8 @@ def _cruces(conn, confirmados: set) -> list[dict]:
                          bool(c["dividido"]), analisis.postura(c["subtipo"], c["voto"]))
         if not res:
             continue
+        if res[0] == "veredicto" and mezclas.enmienda_suelta_del_senado(c["tipo"], c["expediente"]):
+            res = ("juzga_tu", res[1])         # por una enmienda suelta se cuelan asuntos ajenos a la ley
         clave = (c["votacion_id"], c["promesa_id"], c["partido"], res[1])
         revisado = clave in confirmados
         # Un incumple solo se afirma revisado a mano: el juez ve el titulo, no el contenido de la iniciativa.

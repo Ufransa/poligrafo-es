@@ -65,6 +65,11 @@
           "url_boe"
         ],
         "properties": {
+          "mezcla": {
+            "type": ["object", "null"],
+            "required": ["motivo"],
+            "properties": {"motivo": {"type": "string"}}
+          },
           "subtipo": {
             "enum": [
               "normal",

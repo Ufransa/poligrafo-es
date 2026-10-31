@@ -69,4 +69,5 @@ def conectar(ruta: Path) -> sqlite3.Connection:
     except sqlite3.OperationalError:
         pass
     conn.execute("CREATE TABLE IF NOT EXISTS boe (clave TEXT PRIMARY KEY, identificador TEXT)")
+    conn.execute("CREATE TABLE IF NOT EXISTS mezclas (identificador TEXT PRIMARY KEY, mezcla INTEGER, ajenos TEXT)")
     return conn

@@ -240,7 +240,7 @@ def _exportar(cli, fichero, anio="2023"):
 
 def test_lo_aprobado_sale_en_datos_json_con_sus_condiciones(cli, tmp_path):
     datos = _exportar(cli, _aprobado(cli, tmp_path))
-    assert datos["meta"]["version_contrato"] == "1.2.0"
+    assert datos["meta"]["version_contrato"] == "1.3.0"
     [p] = datos["test"]
     assert p["partido"] == "PSOE" and p["partido_nombre"] and p["tema"] == "Vivienda"
     assert p["resumen"].startswith("Resumen neutral:") and p["cita"] and p["pagina"] == 1
