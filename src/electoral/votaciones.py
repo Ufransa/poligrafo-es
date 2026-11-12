@@ -116,7 +116,9 @@ def clasificar(v: dict) -> tuple[str, bool]:
     if TRAMITE.search(texto):
         return "tramite", False
     bajo = texto.lower()
-    if "texto alternativo" in bajo:
+    # Un voto particular es el texto alternativo de un grupo a un informe o dictamen (132-1, salud mental):
+    # votarlo no es una postura sobre la iniciativa.
+    if "texto alternativo" in bajo or "voto particular" in bajo:
         return "texto_alternativo", False
     if "devoluci" in bajo:
         return "devolucion", False
@@ -125,7 +127,8 @@ def clasificar(v: dict) -> tuple[str, bool]:
     if v["titulo_subgrupo"] and "totalidad" not in v["titulo_subgrupo"].lower():
         return "parcial", False
     # A veces el subgrupo viene vacío y la enmienda se anuncia al final del título.
-    if re.search(r"votación de (la|las) enmiendas?\.?\s*$", v["expediente"].lower()):
+    # También «Votación en bloque de las enmiendas» del Senado (193-5): no es la votación de la ley.
+    if re.search(r"votación (en bloque )?de (la|las) enmiendas?\.?\s*$", v["expediente"].lower()):
         return "parcial", False
     es_conv = v["tipo"].lower().startswith("convalidación") and "real decreto-ley" in v["expediente"].lower()
     return "normal", es_conv
@@ -167,17 +170,25 @@ def votos_por_partido(v: dict, mapa: dict) -> dict:
     for p in mapa["mixto"]:
         mixto.setdefault(p["diputado"], []).append(p)
     por_partido: dict[str, Counter] = {}
+    presentes: Counter = Counter()      # diputados del partido en la votación, voten o no
     for d in v["diputados"]:
         if d["grupo"] == "GMx":
             tramos = [p for p in mixto.get(d["diputado"], []) if p["desde"] <= v["fecha"]]
             partido = tramos[-1]["partido"] if tramos else None
         else:
             partido = mapa["grupos"].get(d["grupo"])
-        if partido is None or d["voto"] == "No vota":   # una ausencia no es un voto
+        if partido is None:
+            continue
+        presentes[partido] += 1
+        if d["voto"] == "No vota":                     # una ausencia no es un voto
             continue
         por_partido.setdefault(partido, Counter())[d["voto"]] += 1
     salida = {}
     for partido, c in por_partido.items():
+        # Con menos de la mitad del grupo votando, el voto es de unos pocos diputados, no la postura del
+        # partido (53-1: ERC con 1 «No» y 6 «No vota»).
+        if sum(c.values()) * 2 < presentes.get(partido, 0):
+            continue
         voto, n = c.most_common(1)[0]
         total = sum(c.values())
         salida[partido] = {"voto": voto, "dividido": (total - n) / total > 0.10}
@@ -214,3 +225,19 @@ def guardar(conn, v: dict, mapa: dict) -> None:
 
 def cargar_mapa(raiz: Path) -> dict:
     return json.loads((raiz / "config" / "diputados.json").read_text(encoding="utf-8"))
+
+
+_AUTORES = [("popular", "PP"), ("socialista", "PSOE"), ("sumar", "Sumar"), ("vox", "Vox"),
+            ("republicano", "ERC"), ("junts", "Junts"), ("bildu", "EH Bildu"), ("pnv", "PNV")]
+_AUTORIA = re.compile(r"(?:presentad[ao]s? por|del|de los) (?:el |los )?grupos? parlamentarios? (.+?)"
+                      r"(?:,| sobre | relativ| para | al | a la |\.|$)", re.IGNORECASE)
+
+
+def autores(expediente: str) -> set:
+    """Partidos que firman la iniciativa según su título («presentada por el Grupo Parlamentario VOX», «de los
+    Grupos Parlamentarios Popular en el Congreso y Socialista»). Vacío si la presenta el Gobierno o el Mixto."""
+    salida = set()
+    for m in _AUTORIA.finditer(" ".join((expediente or "").split())):
+        tramo = m.group(1).lower()
+        salida |= {partido for clave, partido in _AUTORES if clave in tramo}
+    return salida

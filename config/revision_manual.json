@@ -15,38 +15,24 @@
    "veredicto": "incumple",
    "revisado_por": "Fran",
    "fecha": "2026-10-08"
-  },
+  }
+ ],
+ "descartados": [
   {
-   "votacion_id": "24-1",
-   "promesa_id": 281,
+   "votacion_id": "57-1",
+   "promesa_id": 335,
    "partido": "PP",
-   "veredicto": "incumple",
+   "motivo": "La proposición solo deroga el artículo 222 de la LOREG; la promesa trata de la inelegibilidad de condenados por terrorismo (el cruce correcto es el 67-1).",
    "revisado_por": "Fran",
-   "fecha": "2026-10-08"
+   "fecha": "2026-11-12"
   },
   {
-   "votacion_id": "89-3",
-   "promesa_id": 4729,
+   "votacion_id": "146-57",
+   "promesa_id": 4850,
    "partido": "Junts",
-   "veredicto": "incumple",
+   "motivo": "La PNL pide reducir la obligatoriedad de acudir a la mediación; la promesa es reconocerla e impulsarla. Posible polaridad invertida.",
    "revisado_por": "Fran",
-   "fecha": "2026-10-08"
-  },
-  {
-   "votacion_id": "130-6",
-   "promesa_id": 404,
-   "partido": "PP",
-   "veredicto": "incumple",
-   "revisado_por": "Fran",
-   "fecha": "2026-10-08"
-  },
-  {
-   "votacion_id": "202-1",
-   "promesa_id": 5564,
-   "partido": "PSOE",
-   "veredicto": "incumple",
-   "revisado_por": "Fran",
-   "fecha": "2026-10-08"
+   "fecha": "2026-11-12"
   }
  ]
 }

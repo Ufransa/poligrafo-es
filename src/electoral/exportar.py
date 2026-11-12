@@ -8,7 +8,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-from src.electoral import analisis, mezclas
+from src.electoral import analisis, mezclas, votaciones
 
 VERSION_CONTRATO = "1.3.0"
 
@@ -52,7 +52,7 @@ def _temas(promesas: list[dict]) -> dict:
     return dict(salida)
 
 
-def _cruces(conn, confirmados: set) -> list[dict]:
+def _cruces(conn, confirmados: set, descartados: set = frozenset()) -> list[dict]:
     """El nivel se recalcula aquí con el voto y el «dividido» actuales: corregir los datos de votos no deja
     veredictos obsoletos."""
     from src.electoral import juez
@@ -66,7 +66,12 @@ def _cruces(conn, confirmados: set) -> list[dict]:
             continue                           # juicio del modelo antiguo (veredicto directo): se rehace al juzgar
         res = juez.nivel({m: ((r["postura"], r["fuerza"]) if r else None) for m, r in jueces.items()},
                          bool(c["dividido"]), analisis.postura(c["subtipo"], c["voto"]))
-        if not res:
+        if not res or (c["votacion_id"], c["promesa_id"], c["partido"]) in descartados:
+            continue
+        # Votar «Sí» a tu propia iniciativa no puede contradecir tu programa: si sale «incumple», el juez leyó
+        # la postura al revés por el título (PP y su PNL contra el cierre nuclear). Una devolución sí puede.
+        if (res[1] == "incumple" and c["subtipo"] == "normal" and c["voto"] == "Sí"
+                and c["partido"] in votaciones.autores(c["expediente"])):
             continue
         if res[0] == "veredicto" and mezclas.enmienda_suelta_del_senado(c["tipo"], c["expediente"]):
             res = ("juzga_tu", res[1])         # por una enmienda suelta se cuelan asuntos ajenos a la ley
@@ -89,6 +94,14 @@ def _confirmados(ruta: Path) -> set:
         return set()
     datos = json.loads(ruta.read_text(encoding="utf-8"))
     return {(x["votacion_id"], x["promesa_id"], x["partido"], x["veredicto"]) for x in datos["confirmados"]}
+
+
+def _descartados(ruta: Path) -> set:
+    """Cruces que una persona ha leído y retirado (no comparables): «descartados» en revision_manual.json."""
+    if not ruta.exists():
+        return set()
+    datos = json.loads(ruta.read_text(encoding="utf-8"))
+    return {(x["votacion_id"], x["promesa_id"], x["partido"]) for x in datos.get("descartados", [])}
 
 
 def _test(conn, raiz: Path, ruta: Path, anio: int, partidos: list, votaciones: list, cruces: list) -> list[dict]:
@@ -132,7 +145,8 @@ def construir(conn, raiz: Path, revision: Path | None = None, test_ciegas: Path 
     partidos = json.loads((raiz / "config" / "partidos_electoral.json").read_text(encoding="utf-8"))
     votaciones = _votaciones(conn)
     promesas = _promesas(conn)
-    cruces = _cruces(conn, _confirmados(revision or raiz / "config" / "revision_manual.json"))
+    revision = revision or raiz / "config" / "revision_manual.json"
+    cruces = _cruces(conn, _confirmados(revision), _descartados(revision))
     test_ciegas = test_ciegas or Path(os.environ.get("ELECTORAL_TEST_CIEGAS") or raiz / "config" / "test_ciegas.json")
     test = _test(conn, raiz, test_ciegas, test_anio, partidos, votaciones, cruces)
     return {

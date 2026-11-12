@@ -126,6 +126,10 @@ def nivel(respuestas: dict, dividido: bool, postura_voto: str | None):
         if len(coinciden) == len(JUECES) and all(r[1] == "directa" for r in coinciden) and not dividido:
             return "veredicto", veredicto
         if len(coinciden) >= 2:
+            # Un «incumple» sin ningún juez que vea relación directa es casi siempre una moción o PNL de título
+            # genérico que solo comparte tema (revisión del 2026-11-11: 190 de 298). No se publica.
+            if veredicto == "incumple" and not any(r[1] == "directa" for r in coinciden):
+                return None
             return "juzga_tu", veredicto
     return None
 

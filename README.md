@@ -42,6 +42,18 @@ Cada paso es reanudable: si un tope de gasto corta la carga, se vuelve a lanzar 
    cruce dos veces. Las instrucciones exactas están en `src/electoral/juez.py`.
 5. **Veredicto** solo si los tres coinciden y los tres ven una relación directa. Si coinciden dos, el cruce se
    muestra como **«juzga tú»**, sin veredicto. Un partido que vota dividido nunca recibe veredicto.
+6. Un **«incumple»** solo es veredicto si una persona lo ha confirmado leyendo la iniciativa, no solo su título
+   (`config/revision_manual.json`, lista `confirmados`). El aviso de Telegram de cada caso pendiente lleva el
+   enlace al BOCG y a la sesión, y lo que hay que comprobar. Los cruces leídos que no son comparables van a la
+   lista `descartados`, con su motivo, y desaparecen de la web.
+7. No se publica:
+   - un «incumple» en el que ningún juez ve relación directa (mociones y PNL de título genérico);
+   - un «incumple» de un partido que vota «Sí» a su propia iniciativa (el juez leyó la postura al revés);
+   - la postura de un partido cuando vota menos de la mitad de su grupo;
+   - los votos particulares y las enmiendas del Senado votadas en bloque, que no son la votación de la iniciativa.
+
+   Revisión del 2026-11-11 leyendo el contenido real: 4 de los 6 «incumple» confirmados solo con el título no se
+   sostenían (pasaron a «juzga tú») y 2 «cumple» se retiraron por tratar otro objeto.
 
 ### Cuánto acierta
 

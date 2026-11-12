@@ -31,6 +31,7 @@ NO son promesas (descártalas):
 - Logros pasados o balance de gestión ("hemos aprobado", "se ha puesto en marcha"), aunque aparezcan en una lista.
 - Diagnósticos, críticas a otros partidos, valores y declaraciones genéricas.
 - Paraguas que valdrían para cualquier tema ("mejorar la cooperación", "defender los derechos").
+- Índices, sumarios y títulos de capítulo (líneas con puntos suspensivos y número de página).
 
 Para cada promesa devuelve:
 - "promesa": una frase en castellano, autocontenida (máx. 30 palabras). Si el original está en otra lengua, tradúcela fielmente.
@@ -74,6 +75,8 @@ def bloques_por_pagina(pdf: bytes) -> list[tuple[int, str]]:
 
 
 MARCA = re.compile(r"\[\[p\. (\d+)\]\]")
+# Una línea de índice: «Vivienda asequible ........ 45». En 2023, 18 «promesas» del PSOE salieron del índice.
+INDICE = re.compile(r"(?:\.\s?){4,}\s*\d+|…{2,}")
 
 
 def _normalizar(t: str) -> str:
@@ -131,6 +134,8 @@ def extraer(conn, llm) -> None:
                 continue
             for p in out.get("promesas", []):
                 cita = MARCA.sub("", p.get("cita", "")).strip()
+                if INDICE.search(cita):
+                    continue                       # línea del índice, no una promesa
                 pagina = pagina_de_cita(cita, b["texto"])
                 if pagina is None:
                     continue                       # la cita no aparece en el programa: no se publica

@@ -31,7 +31,7 @@ Responde SOLO con JSON: {"mezcla": bool, "ajenos": [str]}"""
 
 
 def enmienda_suelta_del_senado(tipo: str | None, expediente: str | None) -> bool:
-    return (tipo or "").startswith("Enmiendas del Senado") and "votación de la enmienda" in (expediente or "").lower()
+    return (tipo or "").startswith("Enmiendas del Senado") and         re.search(r"votación (en bloque )?de (la|las) enmiendas?", (expediente or "").lower()) is not None
 
 
 def nota(conn, v) -> dict | None:

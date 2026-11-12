@@ -19,6 +19,29 @@ def _enviar(texto: str) -> None:
     send_message(os.environ["TELEGRAM_BOT_TOKEN"], os.environ["TELEGRAM_CHANNEL_ID"], texto)
 
 
+COMPROBAR = ("Antes de confirmar, abre la iniciativa y comprueba (el título no basta):\n"
+             "1. ¿Decide lo mismo que promete el programa, o solo toca la misma ley o el mismo tema?\n"
+             "2. ¿Mete otros asuntos que expliquen el voto?\n"
+             "3. En el Diario de Sesiones, ¿por qué dijo el partido que votaba así?\n"
+             "Si dudas en cualquiera, no lo confirmes: queda en «Juzga tú».")
+
+
+def mensaje_revision(c: dict, p: dict, v: dict, confirmar: dict) -> str:
+    """El aviso lleva el texto de la iniciativa y la sesión: confirmar solo con el título repetía el error del
+    juez (revisión del 2026-11-11: 4 de los 6 «incumple» confirmados no se sostenían al leer la iniciativa)."""
+    enlaces = [f"Iniciativa (BOCG): {v.get('url_bocg') or 'sin enlace, búscala por el título'}",
+               f"Sesión y Diario de Sesiones: {v.get('url_sesion') or '-'}"]
+    if v.get("url_boe"):
+        enlaces.append(f"BOE: {v['url_boe']}")
+    nota = f"\n⚠️ {v['mezcla']['motivo']}" if v.get("mezcla") else ""
+    return (f"<b>Revisar «incumple»: {c['partido']}</b>\n{v['fecha']} · {v.get('tipo', '')}\n"
+            f"{v['expediente'][:300]}{nota}\n"
+            f"Votó {c['voto']}. Promesa: {p['texto']}\n«{p['cita']}» ({p['url_programa_pagina']})\n\n"
+            + "\n".join(enlaces) + f"\n\n{COMPROBAR}\n\n"
+            f"Para confirmarlo: añadir {json.dumps(confirmar, ensure_ascii=False)} a «confirmados» en "
+            f"config/revision_manual.json. Si no es comparable, a «descartados» con un «motivo».")
+
+
 def avisar(conn, datos: dict) -> int:
     """Un mensaje por cada «incumple» unánime que aún no está revisado ni avisado."""
     prom = {p["id"]: p for p in datos["promesas"]}
@@ -31,9 +54,7 @@ def avisar(conn, datos: dict) -> int:
             continue
         p, v = prom[c["promesa_id"]], vots[c["votacion_id"]]
         confirmar = dict(zip(("votacion_id", "promesa_id", "partido"), clave)) | {"veredicto": "incumple"}
-        _enviar(f"<b>Revisar «incumple»: {c['partido']}</b>\n{v['fecha']}: {v['expediente'][:300]}\n"
-                f"Votó {c['voto']}. Promesa: {p['texto']}\n«{p['cita']}» ({p['url_programa_pagina']})\n"
-                f"Para confirmarlo: añadir {json.dumps(confirmar, ensure_ascii=False)} a config/revision_manual.json")
+        _enviar(mensaje_revision(c, p, v, confirmar))
         conn.execute("INSERT INTO avisos VALUES (?,?,?, datetime('now'))", clave)
         conn.commit()
         n += 1
