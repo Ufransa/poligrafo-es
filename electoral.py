@@ -161,6 +161,18 @@ def _mezclas_de_la_noche(a) -> str | None:
         return aviso
 
 
+def _verificar_de_la_noche(a) -> str | None:
+    """Segunda pasada con el texto del BOCG. Si falla, la web se publica igual con lo que ya había."""
+    try:
+        main(["verificar", "--tope", "0.05", *(["--iniciativas", a.iniciativas] if a.iniciativas else []), "--db", a.db])
+        return None
+    except (Exception, SystemExit) as e:
+        aviso = f"verificar: {type(e).__name__}: {e}"[:300]
+        noche._enviar(f"<b>PolígrafoES</b>: esta noche falló la comprobación con el texto de las iniciativas ({aviso}). "
+                      "La web se publica igual; mañana se reintenta.")
+        return aviso
+
+
 def cmd_noche(a, conn):
     """Pasos del motor y, al final, aviso y publicación. La salud se escribe siempre, también si algo falla."""
     avisos, error, aviso = 0, None, None
@@ -170,6 +182,7 @@ def cmd_noche(a, conn):
               *(["--boe", a.boe] if a.boe else []), "--db", a.db])
         aviso = _mezclas_de_la_noche(a)
         main(["juzgar", "--tope", str(a.tope), "--db", a.db])
+        aviso = _verificar_de_la_noche(a) or aviso
         main(["exportar", "--salida", a.salida, "--db", a.db])
         datos = json.loads(Path(a.salida).read_text(encoding="utf-8"))
         avisos = noche.avisar(conn, datos)

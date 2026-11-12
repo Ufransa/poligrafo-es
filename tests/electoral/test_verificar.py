@@ -142,29 +142,8 @@ def test_a_model_failure_leaves_the_verdict_as_it_was(cli, zips, tmp_path):
     assert cli("exportar")["cruces"] == antes["cruces"]
 
 
-def test_an_incumple_confirmed_by_hand_stays_firm_even_if_the_step_disagrees(cli, zips, tmp_path):
-    bocg = _preparar(cli, zips, tmp_path)
-    # Se fuerza un «incumple» unánime: el partido votó lo contrario de lo que el juez dice que prometió.
-    conn = sqlite3.connect(cli.db)
-    vid, pid = next((c["votacion_id"], c["promesa_id"]) for c in cli("exportar")["cruces"]
-                    if c["nivel"] == "veredicto" and c["votacion_id"] in _con_bocg(cli("exportar")))
-    actual = conn.execute("SELECT voto FROM votos_partido WHERE votacion_id = ? AND partido = 'PSOE'", (vid,)).fetchone()[0]
-    conn.execute("UPDATE votos_partido SET voto = ? WHERE votacion_id = ? AND partido = 'PSOE'",
-                 ("No" if actual == "Sí" else "Sí", vid))
-    conn.commit(); conn.close()
-    revision = tmp_path / "revision.json"
-    revision.write_text(json.dumps({"confirmados": [{"votacion_id": vid, "promesa_id": pid, "partido": "PSOE", "veredicto": "incumple"}]}),
-                        encoding="utf-8")
-    cli("verificar", "--iniciativas", INICIATIVAS, env=_env(LLM_FALSO_VERIFICA="otro", **bocg))
-    c = next(c for c in cli("exportar", "--revision", str(revision))["cruces"] if (c["votacion_id"], c["promesa_id"]) == (vid, pid))
-    assert (c["nivel"], c["veredicto"], c["revisado_a_mano"]) == ("veredicto", "incumple", True)
-    # Sin confirmación a mano, el mismo cruce ni es veredicto ni pide revisión: el texto no lo sostiene.
-    sin = next(c for c in cli("exportar")["cruces"] if (c["votacion_id"], c["promesa_id"]) == (vid, pid))
-    assert (sin["nivel"], sin["pendiente_revision"]) == ("juzga_tu", False)
-
-
-def test_an_incumple_on_a_law_that_mixes_matters_does_not_ask_for_review(cli, zips, tmp_path):
-    bocg = _preparar(cli, zips, tmp_path)
+def _forzar_incumple(cli):
+    """Un «incumple» unánime con BOCG: el partido votó lo contrario de lo que el juez dice que prometió."""
     datos = cli("exportar")
     vid, pid = next((c["votacion_id"], c["promesa_id"]) for c in datos["cruces"]
                     if c["nivel"] == "veredicto" and c["votacion_id"] in _con_bocg(datos))
@@ -173,11 +152,33 @@ def test_an_incumple_on_a_law_that_mixes_matters_does_not_ask_for_review(cli, zi
     conn.execute("UPDATE votos_partido SET voto = ? WHERE votacion_id = ? AND partido = 'PSOE'",
                  ("No" if actual == "Sí" else "Sí", vid))
     conn.commit(); conn.close()
-    assert next(c for c in cli("exportar")["cruces"] if (c["votacion_id"], c["promesa_id"]) == (vid, pid))["pendiente_revision"]
-    # Mismo objeto, pero la norma mete otros asuntos: el «No» puede deberse a ellos.
-    cli("verificar", "--iniciativas", INICIATIVAS, env=_env(LLM_FALSO_VERIFICA="mismo", LLM_FALSO_VERIFICA_MEZCLA="1", **bocg))
-    c = next(c for c in cli("exportar")["cruces"] if (c["votacion_id"], c["promesa_id"]) == (vid, pid))
-    assert (c["nivel"], c["veredicto"], c["pendiente_revision"]) == ("juzga_tu", "incumple", False)
+    return vid, pid
+
+
+def _cruce(datos, vid, pid):
+    return next(c for c in datos["cruces"] if (c["votacion_id"], c["promesa_id"]) == (vid, pid))
+
+
+def test_an_incumple_is_never_lowered_by_the_step(cli, zips, tmp_path):
+    # Un «incumple» ya solo es firme si una persona lo confirma; el modelo no decide sobre él (2026-11-12:
+    # la regla de mezcla ocultó el aviso de un «incumple» correcto).
+    bocg = _preparar(cli, zips, tmp_path)
+    vid, pid = _forzar_incumple(cli)
+    for env in ({"LLM_FALSO_VERIFICA": "otro"}, {"LLM_FALSO_VERIFICA": "mismo", "LLM_FALSO_VERIFICA_MEZCLA": "1"}):
+        cli("verificar", "--iniciativas", INICIATIVAS, env=_env(**env, **bocg))
+        c = _cruce(cli("exportar"), vid, pid)
+        assert (c["veredicto"], c["pendiente_revision"]) == ("incumple", True)
+
+
+def test_an_incumple_confirmed_by_hand_stays_firm_even_if_the_step_disagrees(cli, zips, tmp_path):
+    bocg = _preparar(cli, zips, tmp_path)
+    vid, pid = _forzar_incumple(cli)
+    revision = tmp_path / "revision.json"
+    revision.write_text(json.dumps({"confirmados": [{"votacion_id": vid, "promesa_id": pid, "partido": "PSOE", "veredicto": "incumple"}]}),
+                        encoding="utf-8")
+    cli("verificar", "--iniciativas", INICIATIVAS, env=_env(LLM_FALSO_VERIFICA="otro", **bocg))
+    c = _cruce(cli("exportar", "--revision", str(revision)), vid, pid)
+    assert (c["nivel"], c["veredicto"], c["revisado_a_mano"]) == ("veredicto", "incumple", True)
 
 
 def test_a_cumple_on_a_law_that_mixes_matters_stays_firm(cli, zips, tmp_path):

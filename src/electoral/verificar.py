@@ -5,7 +5,8 @@ iniciativa (arranque de su texto en el BOCG), no solo con el título.
 El juez (juez.py) solo ve el título. La revisión del 2026-11-11 encontró veredictos firmes donde la iniciativa
 tocaba la misma ley que la promesa pero decidía otra cosa (PP y la LOREG: la proposición solo derogaba el artículo
 222). Este paso no cambia el juez ni su huella: guarda su resultado aparte (tabla `verificaciones`) y `exportar`
-lo usa para bajar a «Juzga tú» los veredictos que no se sostienen. Nunca sube un cruce ni cambia su sentido.
+lo usa para bajar a «Juzga tú» los «cumple» que no se sostienen. Los «incumple» no se tocan: lo que el modelo
+ve en ellos va como nota en el aviso de revisión. Nunca sube un cruce ni cambia su sentido.
 Sin texto del BOCG no decide: el cruce sigue como está.
 """
 import hashlib
@@ -49,7 +50,7 @@ Responde SOLO con JSON: {"promesas": [{"id": int, "objeto": "mismo"|"otro"|"no_s
 
 ESQUEMA = """CREATE TABLE IF NOT EXISTS verificaciones (
     votacion_id TEXT, promesa_id INTEGER, partido TEXT,
-    resultado TEXT,             -- 'sostiene' | 'no_sostiene' | 'sin_contenido'
+    resultado TEXT,             -- 'sostiene' | 'no_sostiene' | 'nota' | 'sin_contenido'
     motivo TEXT, url TEXT, huella TEXT, fecha TEXT,
     PRIMARY KEY (votacion_id, promesa_id, partido)
 );
@@ -148,15 +149,22 @@ def contenido(conn, url: str) -> str | None:
 # --- La comprobación ------------------------------------------------------------------
 
 def decidir(pasadas: list[dict | None], veredicto: str) -> tuple[str, str]:
-    """(resultado, motivo). Solo deja de sostenerse lo que el modelo repite en todas las pasadas: que la
-    iniciativa decide otra cosa o, en un «incumple», que la norma mezcla asuntos que pueden explicar el voto."""
+    """(resultado, motivo). Cuenta solo lo que el modelo repite en todas las pasadas.
+
+    Un «cumple» deja de sostenerse si la iniciativa decide otra cosa. Un «incumple» nunca se baja: ya solo es
+    firme si una persona lo confirma, y en la medición del 2026-11-12 la regla de mezcla ocultó uno correcto
+    (101-19). Lo que el modelo ve en un «incumple» queda como `nota` para el aviso de revisión."""
     if any(p is None for p in pasadas):
         return "sostiene", ""
-    if all(p.get("objeto") == "otro" for p in pasadas):
-        return "no_sostiene", "otro objeto: " + str(pasadas[0].get("por_que") or "")[:300]
-    if veredicto == "incumple" and all(p.get("mezcla") is True for p in pasadas):
-        return "no_sostiene", "mezcla asuntos: " + str(pasadas[0].get("por_que") or "")[:300]
-    return "sostiene", str(pasadas[0].get("por_que") or "")[:300]
+    por_que = str(pasadas[0].get("por_que") or "")[:300]
+    otro = all(p.get("objeto") == "otro" for p in pasadas)
+    if veredicto == "cumple":
+        return ("no_sostiene", "otro objeto: " + por_que) if otro else ("sostiene", por_que)
+    if otro:
+        return "nota", "El texto de la iniciativa parece decidir otra cosa: " + por_que
+    if all(p.get("mezcla") is True for p in pasadas):
+        return "nota", "La norma parece mezclar asuntos que pueden explicar el voto: " + por_que
+    return "sostiene", por_que
 
 
 def _huella(texto: str, promesas: list) -> str:
@@ -193,7 +201,7 @@ def verificar(conn, llm, iniciativas: list[dict] | None = None) -> dict:
     for c in firmes:
         por_votacion.setdefault(c["votacion_id"], []).append(c)
     indice = None
-    cuenta = {"sostiene": 0, "no_sostiene": 0, "sin_contenido": 0, "ya_hechas": 0, "pendientes": 0}
+    cuenta = {"sostiene": 0, "no_sostiene": 0, "nota": 0, "sin_contenido": 0, "ya_hechas": 0, "pendientes": 0}
     for vid, cruces in por_votacion.items():
         v = conn.execute("SELECT * FROM votaciones WHERE id = ?", (vid,)).fetchone()
         url = v["url_bocg"]
@@ -235,3 +243,10 @@ def no_sostenidos(conn) -> set:
     conn.executescript(ESQUEMA)
     return {(r[0], r[1], r[2]) for r in conn.execute(
         "SELECT votacion_id, promesa_id, partido FROM verificaciones WHERE resultado = 'no_sostiene'")}
+
+
+def notas(conn) -> dict:
+    """{(votación, promesa, partido): motivo} de los «incumple» en los que el texto de la iniciativa pide cautela."""
+    conn.executescript(ESQUEMA)
+    return {(r[0], r[1], r[2]): r[3] for r in conn.execute(
+        "SELECT votacion_id, promesa_id, partido, motivo FROM verificaciones WHERE resultado = 'nota'")}
