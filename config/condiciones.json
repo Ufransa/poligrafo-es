@@ -1,5 +1,5 @@
 {
- "_nota": "Tabla escrita a mano y revisada por Fran. El modelo solo elige claves; todo lo demás sale de aquí. Ver docs/superpowers/specs/2026-10-30-test-a-ciegas-design.md §5.3.",
+ "_nota": "PROPUESTA de revisión (2026-11-12), sin aplicar. Mismo formato que config/condiciones.json. Qué cambia y por qué: condiciones_auditoria.md. Tabla escrita a mano y revisada por Fran. El modelo solo elige claves; todo lo demás sale de aquí. Ver docs/superpowers/specs/2026-10-30-test-a-ciegas-design.md §5.3.",
  "materias": {
   "gobierno": {
    "nivel": 1, "inviable": false,
@@ -7,15 +7,15 @@
    "explicacion": "Lo puede aprobar el Gobierno por reglamento o real decreto, sin pasar por las Cortes.",
    "norma": "Art. 97 de la Constitución",
    "url": "https://www.boe.es/buscar/act.php?id=BOE-A-1978-31229#a97",
-   "descripcion_para_el_modelo": "Basta un reglamento o real decreto del Gobierno; no hace falta ley."
+   "descripcion_para_el_modelo": "Basta un reglamento o real decreto del Gobierno porque una ley ya le da esa facultad (por ejemplo, fijar el salario mínimo interprofesional). NO vale para crear, subir, bajar o suprimir impuestos, ni para pensiones o derechos: eso necesita ley. Si dudas, ley_ordinaria."
   },
   "ley_ordinaria": {
    "nivel": 2, "inviable": false,
    "etiqueta": "Ley ordinaria",
    "explicacion": "Necesita una ley aprobada por las Cortes por mayoría simple: más votos a favor que en contra.",
-   "norma": "Arts. 66 y 90 de la Constitución",
-   "url": "https://www.boe.es/buscar/act.php?id=BOE-A-1978-31229#a90",
-   "descripcion_para_el_modelo": "Necesita una ley aprobada por mayoría simple en las Cortes (la mayoría de cambios fiscales, laborales, de vivienda o sanidad)."
+   "norma": "Arts. 66.2 y 79.2 de la Constitución",
+   "url": "https://www.boe.es/buscar/act.php?id=BOE-A-1978-31229#a79",
+   "descripcion_para_el_modelo": "Necesita una ley aprobada por mayoría simple en las Cortes: impuestos estatales (IRPF, Sociedades, impuestos nuevos a la banca, a servicios digitales o a grandes fortunas), legislación laboral, pensiones y Seguridad Social, nacionalidad, gasto en defensa. Si además la materia está repartida con las comunidades autónomas, añade la clave compartida que corresponda."
   },
   "ley_organica": {
    "nivel": 3, "inviable": false,
@@ -23,31 +23,63 @@
    "explicacion": "Necesita una ley orgánica: mayoría absoluta del Congreso, al menos 176 de los 350 diputados, en una votación final sobre el conjunto de la ley.",
    "norma": "Art. 81 de la Constitución",
    "url": "https://www.boe.es/buscar/act.php?id=BOE-A-1978-31229#a81",
-   "descripcion_para_el_modelo": "Toca derechos fundamentales y libertades públicas, el régimen electoral general, los Estatutos de Autonomía o el Poder Judicial: ley orgánica."
+   "descripcion_para_el_modelo": "SOLO estos casos: regular directamente un derecho fundamental o libertad pública de los artículos 15 a 29 de la Constitución (vida, libertad y penas de prisión, por tanto el Código Penal; intimidad y protección de datos; expresión; reunión; asociación y partidos; educación; sindicación y huelga); el régimen electoral general; aprobar o reformar un Estatuto de Autonomía; el Poder Judicial y el Tribunal Constitucional; las Fuerzas y Cuerpos de Seguridad; la financiación de las comunidades autónomas (LOFCA); transferir a las comunidades competencias del Estado; los derechos de los extranjeros; el referéndum. La vivienda, la sanidad, el trabajo, la propiedad, las pensiones o los impuestos NO son ley orgánica aunque el programa los llame «derechos»."
+  },
+  "tributos_cedidos": {
+   "nivel": 3, "inviable": false,
+   "etiqueta": "Impuesto cedido a las comunidades",
+   "explicacion": "Es un impuesto del Estado cedido a las comunidades autónomas, que cobran su recaudación y pueden cambiar parte de sus reglas (tipos, mínimos, deducciones o bonificaciones, según el impuesto). Las Cortes pueden cambiar o suprimir el impuesto por ley, pero cambiar lo que pueden decidir las comunidades exige reformar además la ley orgánica de financiación autonómica.",
+   "norma": "Arts. 10, 11 y 19.2 de la Ley Orgánica 8/1980, de Financiación de las Comunidades Autónomas",
+   "url": "https://www.boe.es/buscar/act.php?id=BOE-A-1980-21166#adecimonoveno",
+   "descripcion_para_el_modelo": "Toca un impuesto estatal cedido a las comunidades autónomas: Patrimonio, Sucesiones y Donaciones, Transmisiones Patrimoniales y Actos Jurídicos Documentados, tributos sobre el juego, impuesto de matriculación, o la parte autonómica del IRPF (tarifa autonómica, mínimos, deducciones autonómicas). Añade también ley_ordinaria. Un cambio solo en la tarifa estatal del IRPF o en las rentas del ahorro es ley_ordinaria sin esta clave."
+  },
+  "haciendas_locales": {
+   "nivel": 3, "inviable": false,
+   "etiqueta": "Impuesto municipal",
+   "explicacion": "Es un impuesto de los ayuntamientos regulado por una ley del Estado. Las Cortes fijan el marco (qué impuestos hay y entre qué límites); cada ayuntamiento decide dentro de él, y algunos impuestos, como la plusvalía municipal, solo existen donde el ayuntamiento los ha establecido.",
+   "norma": "Art. 59 del texto refundido de la Ley Reguladora de las Haciendas Locales",
+   "url": "https://www.boe.es/buscar/act.php?id=BOE-A-2004-4214#a59",
+   "descripcion_para_el_modelo": "Toca impuestos municipales: IBI, IAE, impuesto de vehículos, impuesto de construcciones (ICIO) o plusvalía municipal. Añade también ley_ordinaria."
   },
   "compartida_vivienda": {
    "nivel": 3, "inviable": false,
-   "etiqueta": "Competencia compartida",
+   "etiqueta": "Competencia compartida: vivienda",
    "explicacion": "La vivienda es competencia de las comunidades autónomas. El Estado puede actuar con ayudas y financiación, impuestos, legislación civil (por ejemplo, la de alquileres) o las bases de la planificación económica, pero la gestión y buena parte de la regulación dependen de cada comunidad.",
    "norma": "Arts. 148.1.3.ª y 149.1.8.ª y 13.ª de la Constitución",
    "url": "https://www.boe.es/buscar/act.php?id=BOE-A-1978-31229#a148",
-   "descripcion_para_el_modelo": "Vivienda: las comunidades autónomas tienen la competencia; el Estado actúa con ayudas, fiscalidad, legislación civil o bases de la economía."
+   "descripcion_para_el_modelo": "SOLO vivienda, urbanismo o suelo: las comunidades autónomas tienen la competencia; el Estado actúa con ayudas, fiscalidad, legislación civil o bases de la economía. No la uses para impuestos ni para otras materias repartidas."
   },
   "compartida_sanidad": {
    "nivel": 3, "inviable": false,
-   "etiqueta": "Competencia compartida",
+   "etiqueta": "Competencia compartida: sanidad",
    "explicacion": "El Estado fija las bases y la coordinación general de la sanidad y regula los medicamentos; los servicios de salud los gestionan las comunidades autónomas.",
    "norma": "Art. 149.1.16.ª de la Constitución",
    "url": "https://www.boe.es/buscar/act.php?id=BOE-A-1978-31229#a149",
-   "descripcion_para_el_modelo": "Sanidad: el Estado fija las bases y la coordinación; las comunidades gestionan los servicios de salud."
+   "descripcion_para_el_modelo": "SOLO sanidad: el Estado fija las bases y la coordinación; las comunidades gestionan los servicios de salud (plantillas, listas de espera, hospitales)."
   },
   "compartida_educacion": {
    "nivel": 3, "inviable": false,
-   "etiqueta": "Competencia compartida",
+   "etiqueta": "Competencia compartida: educación",
    "explicacion": "El Estado fija las normas básicas y regula los títulos académicos; las comunidades autónomas gestionan los centros y desarrollan esas normas.",
    "norma": "Art. 149.1.30.ª de la Constitución",
    "url": "https://www.boe.es/buscar/act.php?id=BOE-A-1978-31229#a149",
-   "descripcion_para_el_modelo": "Educación: el Estado fija las normas básicas y los títulos; las comunidades gestionan los centros y desarrollan las normas."
+   "descripcion_para_el_modelo": "SOLO educación y universidades: el Estado fija las normas básicas y los títulos; las comunidades gestionan los centros y desarrollan las normas. Si cambia la ley orgánica de educación, añade ley_organica."
+  },
+  "compartida_otras": {
+   "nivel": 3, "inviable": false,
+   "etiqueta": "Competencia compartida",
+   "explicacion": "Es una materia repartida: el Estado aprueba la legislación básica o general y las comunidades autónomas la desarrollan, la gestionan o la ejecutan. Lo que quede fuera de la parte estatal depende de cada comunidad.",
+   "norma": "Arts. 148 y 149.1 de la Constitución",
+   "url": "https://www.boe.es/buscar/act.php?id=BOE-A-1978-31229#a149",
+   "descripcion_para_el_modelo": "Materia repartida entre el Estado y las comunidades que NO es vivienda, sanidad ni educación: medio ambiente, energía, agricultura y ganadería, servicios sociales y dependencia, transporte, cultura, función pública, políticas activas de empleo. No la uses para impuestos (tributos_cedidos o haciendas_locales)."
+  },
+  "tratado_internacional": {
+   "nivel": 3, "inviable": false,
+   "etiqueta": "Tratado internacional",
+   "explicacion": "Firmar, cambiar o abandonar un tratado político o militar, o que obligue a la Hacienda o a cambiar leyes, necesita la autorización previa de las Cortes. Para salir de un tratado se sigue el mismo procedimiento que para entrar, y hay que respetar lo que el propio tratado diga sobre cómo abandonarlo.",
+   "norma": "Arts. 94 y 96 de la Constitución",
+   "url": "https://www.boe.es/buscar/act.php?id=BOE-A-1978-31229#a94",
+   "descripcion_para_el_modelo": "Entrar, salir o renegociar un tratado o una organización internacional que no es la UE: OTAN, acuerdos militares o de bases, convenios internacionales. Para los tratados de la propia UE usa ue_decision_comun."
   },
   "reforma_constitucional": {
    "nivel": 4, "inviable": false,
@@ -55,68 +87,92 @@
    "explicacion": "Exige reformar la Constitución: tres quintos del Congreso (210 diputados) y del Senado. Si lo pide una décima parte de cualquiera de las dos Cámaras en los 15 días siguientes, se somete a referéndum.",
    "norma": "Art. 167 de la Constitución",
    "url": "https://www.boe.es/buscar/act.php?id=BOE-A-1978-31229#a167",
-   "descripcion_para_el_modelo": "Exige cambiar la Constitución en una parte que no es el Título preliminar, los derechos fundamentales de la Sección 1.ª del Capítulo II del Título I ni la Corona."
+   "descripcion_para_el_modelo": "Exige cambiar la Constitución en una parte que no es el Título preliminar, los derechos fundamentales de la Sección 1.ª del Capítulo II del Título I (arts. 15 a 29) ni la Corona. Ejemplos: suprimir o reformar el Senado, cambiar la provincia como circunscripción electoral o el número de diputados fuera de 300-400, cambiar el reparto de competencias del Título VIII."
+  },
+  "recentralizar_competencias": {
+   "nivel": 4, "inviable": false,
+   "etiqueta": "Reforma de Estatutos o de la Constitución",
+   "explicacion": "Las competencias que hoy ejercen las comunidades autónomas están en sus Estatutos. Para que vuelvan al Estado hay que reformar cada Estatuto, por el procedimiento que el propio Estatuto fija y con una ley orgánica de las Cortes, o reformar la Constitución. Una ley de las Cortes no basta por sí sola.",
+   "norma": "Arts. 147.3 y 167 de la Constitución",
+   "url": "https://www.boe.es/buscar/act.php?id=BOE-A-1978-31229#a147",
+   "descripcion_para_el_modelo": "Devolver al Estado competencias que hoy ejercen las comunidades autónomas (por ejemplo, recuperar la sanidad, la educación, la justicia o la policía autonómica), o suprimir las comunidades autónomas. Si lo que se propone es eliminar el Estado autonómico entero, usa además reforma_constitucional_agravada."
   },
   "reforma_constitucional_agravada": {
    "nivel": 5, "inviable": true,
    "etiqueta": "Reforma agravada de la Constitución",
-   "explicacion": "Exige la reforma agravada: dos tercios de cada Cámara, disolución de las Cortes y elecciones, otra vez dos tercios de las nuevas Cámaras y un referéndum. No se ha usado nunca desde 1978.",
+   "explicacion": "Exige la reforma agravada: dos tercios de cada Cámara, disolución de las Cortes y elecciones, otra vez dos tercios de las nuevas Cámaras y un referéndum. No la puede aprobar un solo Parlamento.",
    "norma": "Art. 168 de la Constitución",
    "url": "https://www.boe.es/buscar/act.php?id=BOE-A-1978-31229#a168",
-   "descripcion_para_el_modelo": "Exige cambiar el Título preliminar, los derechos fundamentales de la Sección 1.ª del Capítulo II del Título I o la Corona."
-  },
-  "ue_fiscalidad_armonizada": {
-   "nivel": 6, "inviable": true,
-   "etiqueta": "Depende de la UE",
-   "explicacion": "El IVA y los impuestos especiales están armonizados en la Unión Europea. España solo puede moverse dentro de los márgenes de las directivas (por ejemplo, los tipos reducidos que permiten); salir de ellos exige cambiar la directiva, y en fiscalidad el Consejo de la UE decide por unanimidad de los 27.",
-   "norma": "Directiva 2006/112/CE y art. 113 del Tratado de Funcionamiento de la UE",
-   "url": "https://eur-lex.europa.eu/legal-content/ES/TXT/?uri=CELEX:32006L0112",
-   "descripcion_para_el_modelo": "SOLO si la propuesta sale de los márgenes de la directiva europea: suprimir el IVA, un tipo general por debajo del 15 %, tipos reducidos para bienes o servicios que la directiva no permite, o impuestos especiales (hidrocarburos, alcohol, tabaco, electricidad) por debajo de los mínimos europeos. Una rebaja del IVA de alimentos, medicamentos, transporte de viajeros, higiene femenina o vivienda protegida o social NO es esto: es iva_dentro_margen. Un impuesto nuevo que no es IVA ni impuesto especial (a la banca, a servicios digitales, a grandes fortunas) tampoco: es ley_ordinaria."
+   "descripcion_para_el_modelo": "Exige cambiar el Título preliminar (arts. 1 a 9: unidad de España, soberanía, lenguas, bandera, capital), los derechos fundamentales de la Sección 1.ª del Capítulo II del Título I (arts. 15 a 29) o la Corona (Título II: monarquía o república)."
   },
   "iva_dentro_margen": {
    "nivel": 2, "inviable": false,
    "etiqueta": "IVA dentro del margen europeo",
-   "explicacion": "La directiva europea del IVA permite a cada país aplicar tipos reducidos, y en algunos productos básicos hasta el 0 %, a una lista de bienes y servicios (alimentos, medicamentos, transporte de viajeros, productos de higiene femenina, entre otros). España puede aprobarlo por ley sin pedir permiso a la UE, como hizo con los alimentos en 2023.",
-   "norma": "Directiva 2006/112/CE, art. 98 y anexo III (reformada por la Directiva (UE) 2022/542)",
-   "url": "https://eur-lex.europa.eu/legal-content/ES/TXT/?uri=CELEX:32022L0542",
-   "descripcion_para_el_modelo": "Baja o cambia el IVA de bienes o servicios que la directiva europea permite gravar con tipos reducidos: alimentos, medicamentos, transporte de viajeros, higiene femenina, libros, o vivienda dentro de una política social (vivienda protegida o social). Una rebaja del IVA a cualquier compra de vivienda NO es esto: es ue_fiscalidad_armonizada."
+   "explicacion": "La directiva europea del IVA permite a cada país aplicar tipos reducidos a una lista de bienes y servicios: alimentos, agua, medicamentos y productos de higiene íntima femenina, transporte de viajeros, libros, cultura y deporte, vivienda dentro de una política social, reformas de vivienda, electricidad, entre otros. En alimentos, agua, medicamentos, material médico, transporte de viajeros, libros y paneles solares puede bajarse por debajo del 5 % o hasta el 0 %. España puede aprobarlo por ley sin pedir permiso a la UE.",
+   "norma": "Directiva 2006/112/CE, art. 98 y anexo III (redacción de la Directiva (UE) 2022/542)",
+   "url": "https://www.boe.es/doue/2022/107/L00001-00012.pdf#page=5",
+   "descripcion_para_el_modelo": "Baja o cambia el IVA de bienes o servicios que la directiva europea permite gravar con tipos reducidos: alimentos y bebidas no alcohólicas, agua, medicamentos, higiene íntima femenina y pañales, material médico y para la discapacidad, transporte de viajeros, libros y prensa, cultura y espectáculos, deporte, hostelería y restauración, vivienda (compra dentro de una política social, alquiler, reforma y rehabilitación), electricidad, gas natural, peluquería, ropa y calzado infantil, bicicletas, flores, paneles solares, servicios funerarios. También una revisión general de los tipos reducidos. Ante la duda entre esta clave y ue_fiscalidad_armonizada, usa esta."
+  },
+  "ue_decision_comun": {
+   "nivel": 6, "inviable": false,
+   "etiqueta": "Se decide en la UE",
+   "explicacion": "Es una decisión que se toma en las instituciones de la Unión Europea. El Gobierno de España puede proponerla, defenderla y votar, pero no aprobarla solo: hace falta el acuerdo de los demás países y, según la materia, del Parlamento Europeo.",
+   "norma": "Arts. 2 a 4 del Tratado de Funcionamiento de la UE",
+   "url": "https://www.boe.es/doue/2010/083/Z00047-00199.pdf#page=4",
+   "descripcion_para_el_modelo": "La propuesta consiste en defender, impulsar, vetar o cambiar algo EN la Unión Europea (una directiva, un reglamento, un acuerdo comercial, las reglas fiscales europeas, los tratados, el presupuesto europeo): «defenderemos en Bruselas», «impulsaremos en la UE», «nos opondremos al acuerdo con Mercosur». Úsala en lugar de las claves ue_ marcadas como inviables cuando el programa ya dice que lo hará en la UE."
+  },
+  "ue_inmigracion": {
+   "nivel": 6, "inviable": false,
+   "etiqueta": "Limitado por normas de la UE",
+   "explicacion": "La inmigración y la extranjería son competencia exclusiva del Estado dentro de España, pero la Unión Europea tiene una política común: hay normas europeas sobre entrada y residencia, permisos, derechos de los residentes legales y expulsión de quienes están en situación irregular. Una ley española no puede contradecirlas.",
+   "norma": "Art. 149.1.2.ª de la Constitución y art. 79 del Tratado de Funcionamiento de la UE",
+   "url": "https://www.boe.es/doue/2010/083/Z00047-00199.pdf#page=31",
+   "descripcion_para_el_modelo": "Entrada, residencia, regularización, expulsión o devolución de inmigrantes, visados, control de fronteras. Añade ley_organica si cambia los derechos de los extranjeros, o gobierno si basta cambiar el reglamento de extranjería. La nacionalidad NO es esto: es ley_ordinaria."
+  },
+  "ue_ayudas_estado": {
+   "nivel": 6, "inviable": false,
+   "etiqueta": "Sujeto a las reglas europeas de ayudas",
+   "explicacion": "Las ayudas públicas que favorecen a empresas o sectores concretos y pueden falsear la competencia entre países de la UE están, en principio, prohibidas. Son posibles si encajan en las excepciones europeas o si la Comisión Europea las autoriza. Las ayudas sociales a consumidores y las ayudas por catástrofes naturales están permitidas.",
+   "norma": "Arts. 107 y 108 del Tratado de Funcionamiento de la UE",
+   "url": "https://www.boe.es/doue/2010/083/Z00047-00199.pdf#page=45",
+   "descripcion_para_el_modelo": "Da ayudas públicas selectivas (subvenciones, rebajas fiscales, avales, rescates) a empresas o sectores concretos. NO la uses para ayudas a personas o familias, ni para rebajas de impuestos generales."
+  },
+  "ue_pac": {
+   "nivel": 6, "inviable": false,
+   "etiqueta": "Dentro de la política agraria europea",
+   "explicacion": "La agricultura y la pesca son competencia compartida entre la Unión Europea y los países. Las ayudas y reglas de la Política Agraria Común se aprueban en la UE; España puede elegir entre las opciones que dejan los reglamentos europeos, pero no cambiar por su cuenta esas reglas. La conservación de los recursos pesqueros es competencia exclusiva de la UE.",
+   "norma": "Arts. 3, 4 y 38 a 43 del Tratado de Funcionamiento de la UE",
+   "url": "https://www.boe.es/doue/2010/083/Z00047-00199.pdf#page=16",
+   "descripcion_para_el_modelo": "Cambia las ayudas o reglas de la Política Agraria Común o de la política pesquera común (pagos directos, condicionalidad, cuotas de pesca). Medidas agrarias puramente nacionales (seguros agrarios, ley de la cadena alimentaria, fiscalidad del campo) NO son esto."
+  },
+  "ue_fiscalidad_armonizada": {
+   "nivel": 6, "inviable": true,
+   "etiqueta": "Depende de la UE",
+   "explicacion": "El IVA y los impuestos especiales están armonizados en la Unión Europea. España solo puede moverse dentro de los márgenes de las directivas (por ejemplo, los tipos reducidos que permiten); salir de ellos exige cambiar la directiva, y en fiscalidad el Consejo de la UE decide por unanimidad.",
+   "norma": "Directiva 2006/112/CE, arts. 96 a 98, y art. 113 del Tratado de Funcionamiento de la UE",
+   "url": "https://www.boe.es/doue/2010/083/Z00047-00199.pdf#page=48",
+   "descripcion_para_el_modelo": "SOLO si la propuesta sale sin duda de los márgenes europeos: suprimir el IVA, bajar el tipo general del IVA por debajo del 15 %, aplicar tipo reducido a algo que claramente no está en la lista europea (por ejemplo, coches, ropa de adulto, electrodomésticos, combustibles de automoción), o eliminar un impuesto especial armonizado (hidrocarburos, alcohol, tabaco). Un impuesto nuevo que no es IVA ni impuesto especial (a la banca, a servicios digitales o «tasa Google», a grandes fortunas, a transacciones financieras) NO es esto: es ley_ordinaria. Si la propuesta dice que lo hará «en la UE», usa ue_decision_comun. Ante la duda, NO uses esta clave."
   },
   "ue_comercio_aranceles": {
    "nivel": 6, "inviable": true,
    "etiqueta": "Depende de la UE",
    "explicacion": "Los aranceles y la política comercial con otros países son competencia exclusiva de la Unión Europea: España no puede fijarlos por su cuenta.",
-   "norma": "Arts. 3 y 207 del Tratado de Funcionamiento de la UE",
-   "url": "https://eur-lex.europa.eu/legal-content/ES/TXT/?uri=CELEX:12016E/TXT",
-   "descripcion_para_el_modelo": "Toca aranceles, aduanas o acuerdos comerciales con terceros países: competencia exclusiva de la UE."
-  },
-  "ue_ayudas_estado": {
-   "nivel": 6, "inviable": true,
-   "etiqueta": "Depende de la UE",
-   "explicacion": "Las ayudas públicas a empresas o sectores concretos que puedan falsear la competencia están prohibidas, salvo que encajen en las excepciones europeas o las autorice la Comisión Europea.",
-   "norma": "Arts. 107 y 108 del Tratado de Funcionamiento de la UE",
-   "url": "https://eur-lex.europa.eu/legal-content/ES/TXT/?uri=CELEX:12016E/TXT",
-   "descripcion_para_el_modelo": "Da ayudas públicas selectivas a empresas o sectores concretos que pueden falsear la competencia: necesita autorización de la Comisión Europea."
-  },
-  "ue_pac": {
-   "nivel": 6, "inviable": true,
-   "etiqueta": "Depende de la UE",
-   "explicacion": "Las ayudas agrarias y las reglas de la Política Agraria Común se deciden en la Unión Europea; España solo elige entre las opciones que dan los reglamentos europeos.",
-   "norma": "Arts. 38 a 43 del Tratado de Funcionamiento de la UE",
-   "url": "https://eur-lex.europa.eu/legal-content/ES/TXT/?uri=CELEX:12016E/TXT",
-   "descripcion_para_el_modelo": "Cambia las ayudas o reglas de la Política Agraria Común o la política pesquera común."
+   "norma": "Arts. 3, 31 y 207 del Tratado de Funcionamiento de la UE",
+   "url": "https://www.boe.es/doue/2010/083/Z00047-00199.pdf#page=5",
+   "descripcion_para_el_modelo": "SOLO si España tendría que fijar por su cuenta aranceles, cuotas de importación o acuerdos comerciales con terceros países. Si la propuesta es defender o rechazar un acuerdo comercial en la UE (por ejemplo, Mercosur), usa ue_decision_comun."
   },
   "exclusiva_autonomica": {
    "nivel": 7, "inviable": true,
    "etiqueta": "No es competencia del Estado",
    "explicacion": "Es competencia de las comunidades autónomas: las Cortes no pueden aprobarla para todo el país; tendría que hacerlo cada comunidad.",
-   "norma": "Art. 148 de la Constitución y Estatutos de Autonomía",
+   "norma": "Arts. 148 y 149.3 de la Constitución y Estatutos de Autonomía",
    "url": "https://www.boe.es/buscar/act.php?id=BOE-A-1978-31229#a148",
-   "descripcion_para_el_modelo": "Materia que solo pueden regular y gestionar las comunidades autónomas, sin título estatal posible."
+   "descripcion_para_el_modelo": "CASI NUNCA. Solo si la medida consiste en algo que únicamente puede hacer una comunidad autónoma y el Estado no puede ni financiarlo ni fijar bases: organizar las instituciones propias de una comunidad, aprobar un plan urbanístico, gestionar un servicio autonómico concreto. Si el Estado puede actuar con leyes básicas, ayudas o impuestos, usa la clave compartida que corresponda. Ante la duda, NO uses esta clave."
   }
  },
  "coste": {
   "etiqueta": "Coste para las cuentas públicas",
-  "explicacion": "Si supone un gasto que se repite cada año, necesita dinero asignado en los Presupuestos Generales del Estado. Además, el Gobierno puede negarse a que se tramite una proposición de ley que aumente el gasto o reduzca los ingresos del año en curso.",
+  "explicacion": "Si supone un gasto que se repite cada año, necesita dinero asignado en los Presupuestos Generales del Estado. Además, el Gobierno puede negarse a que se tramite una proposición de ley que aumente el gasto o reduzca los ingresos del presupuesto en vigor.",
   "norma": "Art. 134.6 de la Constitución",
   "url": "https://www.boe.es/buscar/act.php?id=BOE-A-1978-31229#a134"
  }
