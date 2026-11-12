@@ -7,7 +7,7 @@ from pathlib import Path
 from src.electoral import db as edb
 import json
 
-from src.electoral import exportar, fuentes, juez, mezclas, noche, programas, test_ciegas, votaciones
+from src.electoral import exportar, fuentes, juez, mezclas, noche, programas, test_ciegas, verificar, votaciones
 from src.electoral.llm import LLM
 
 RAIZ = Path(__file__).resolve().parent
@@ -115,6 +115,13 @@ def cmd_mezclas(a, conn):
     print(f"{r['mezclan']} de {r['total']} normas mezclan asuntos ({pct:.0f} %)")
 
 
+def cmd_verificar(a, conn):
+    iniciativas = fuentes.cargar_iniciativas(a.iniciativas) if a.iniciativas else None
+    r = _con_gasto("verificar", a, conn, lambda llm: verificar.verificar(conn, llm, iniciativas))
+    print(f"{r['no_sostiene']} no se sostienen, {r['sostiene']} se sostienen, {r['sin_contenido']} sin texto del BOCG, "
+          f"{r['ya_hechas']} ya comprobados, {r['pendientes']} pendientes")
+
+
 def cmd_muestra(a, conn):
     datos = exportar.construir(conn, RAIZ)
     prom = {p["id"]: p for p in datos["promesas"]}
@@ -154,6 +161,18 @@ def _mezclas_de_la_noche(a) -> str | None:
         return aviso
 
 
+def _verificar_de_la_noche(a) -> str | None:
+    """Segunda pasada con el texto del BOCG. Si falla, la web se publica igual con lo que ya había."""
+    try:
+        main(["verificar", "--tope", "0.05", *(["--iniciativas", a.iniciativas] if a.iniciativas else []), "--db", a.db])
+        return None
+    except (Exception, SystemExit) as e:
+        aviso = f"verificar: {type(e).__name__}: {e}"[:300]
+        noche._enviar(f"<b>PolígrafoES</b>: esta noche falló la comprobación con el texto de las iniciativas ({aviso}). "
+                      "La web se publica igual; mañana se reintenta.")
+        return aviso
+
+
 def cmd_noche(a, conn):
     """Pasos del motor y, al final, aviso y publicación. La salud se escribe siempre, también si algo falla."""
     avisos, error, aviso = 0, None, None
@@ -163,6 +182,7 @@ def cmd_noche(a, conn):
               *(["--boe", a.boe] if a.boe else []), "--db", a.db])
         aviso = _mezclas_de_la_noche(a)
         main(["juzgar", "--tope", str(a.tope), "--db", a.db])
+        aviso = _verificar_de_la_noche(a) or aviso
         main(["exportar", "--salida", a.salida, "--db", a.db])
         datos = json.loads(Path(a.salida).read_text(encoding="utf-8"))
         avisos = noche.avisar(conn, datos)
@@ -182,7 +202,7 @@ def cmd_exportar(a, conn):
 def main(argv=None):
     p = argparse.ArgumentParser(prog="electoral")
     sub = p.add_subparsers(dest="cmd", required=True)
-    for nombre in ("descargar", "fuentes", "ingest-programa", "extraer", "juzgar", "exportar", "muestra", "todo", "noche", "mezclas",
+    for nombre in ("descargar", "fuentes", "ingest-programa", "extraer", "juzgar", "exportar", "muestra", "todo", "noche", "mezclas", "verificar",
                    "test-seleccionar", "test-resumir", "test-neutralidad",
                    "test-revision", "test-aprobar"):
         s = sub.add_parser(nombre)
@@ -195,6 +215,8 @@ def main(argv=None):
     sub.choices["fuentes"].add_argument("--iniciativas", help="JSON con iniciativas (por defecto, open data del Congreso)")
     sub.choices["mezclas"].add_argument("--tope", type=float, default=0.1)
     sub.choices["mezclas"].add_argument("--boe", help="JSON clave -> identificador BOE (por defecto, la tabla boe)")
+    sub.choices["verificar"].add_argument("--tope", type=float, default=0.1)
+    sub.choices["verificar"].add_argument("--iniciativas", help="JSON con iniciativas (por defecto, open data del Congreso)")
     sub.choices["muestra"].add_argument("--n", type=int, default=30)
     sub.choices["muestra"].add_argument("--semilla", type=int, default=29)
     sub.choices["muestra"].add_argument("--salida", default=str(RAIZ / "docs" / "revision_muestra.md"))
@@ -230,7 +252,7 @@ def main(argv=None):
     a = p.parse_args(argv)
     conn = edb.conectar(Path(a.db))
     {"descargar": cmd_descargar, "ingest-programa": cmd_ingest, "extraer": cmd_extraer, "juzgar": cmd_juzgar, "fuentes": cmd_fuentes, "muestra": cmd_muestra, "todo": cmd_todo,
-     "exportar": cmd_exportar, "noche": cmd_noche, "mezclas": cmd_mezclas,
+     "exportar": cmd_exportar, "noche": cmd_noche, "mezclas": cmd_mezclas, "verificar": cmd_verificar,
      "test-seleccionar": cmd_test_seleccionar, "test-resumir": cmd_test_resumir,
      "test-neutralidad": cmd_test_neutralidad,
      "test-revision": cmd_test_revision, "test-aprobar": cmd_test_aprobar}[a.cmd](a, conn)

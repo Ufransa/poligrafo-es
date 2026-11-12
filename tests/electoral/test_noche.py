@@ -28,9 +28,23 @@ def _web(tmp_path):
     return remoto, clon
 
 
+TEXTO_BOCG = ("Exposición de motivos. La presente ley regula la transparencia de las actividades de los grupos de interés "
+              "y crea un registro público. " * 8 + "Artículo 1. Objeto de la ley.")
+
+
+def _bocg(tmp_path):
+    """El BOCG de las iniciativas del fixture, sin salir a la red."""
+    ruta = tmp_path / "bocg.json"
+    if not ruta.exists():
+        import re
+        urls = set(re.findall(r"https://\S+?\.PDF", (FIX / "iniciativas_muestra.json").read_text(encoding="utf-8")))
+        ruta.write_text(json.dumps({u: TEXTO_BOCG for u in urls}), encoding="utf-8")
+    return ruta
+
+
 def _noche(tmp_path, zips, web, avisos, **env):
     entorno = {**os.environ, "ELECTORAL_LLM_FALSO": str(FIX / "llm_falso.py"), "LLM_FALSO_TODOS": "1",
-               "ELECTORAL_AVISOS_FALSO": str(avisos), **env}
+               "ELECTORAL_AVISOS_FALSO": str(avisos), "ELECTORAL_BOCG_FALSO": str(_bocg(tmp_path)), **env}
     db = tmp_path / "electoral.db"
     if not db.exists():
         for args in (["ingest-programa", "2023", "PSOE", str(FIX / "programa_prueba.pdf")], ["extraer"]):
@@ -146,3 +160,14 @@ def test_si_falla_lo_de_las_mezclas_la_noche_publica_igual_y_avisa(tmp_path, zip
     salud = json.loads((tmp_path / "noche.json").read_text(encoding="utf-8"))
     assert salud["publicado"] is True and "mezclas" in salud["aviso"]
     assert any("mezclan asuntos" in json.loads(x)["texto"] for x in avisos.read_text(encoding="utf-8").splitlines())
+
+
+def test_un_incumple_cuyo_texto_decide_otra_cosa_se_avisa_igual_y_con_la_nota(tmp_path, zips):
+    _, clon = _web(tmp_path)
+    avisos = tmp_path / "avisos.jsonl"
+    r = _noche(tmp_path, zips, clon, avisos, LLM_FALSO_POSTURA="en_contra", LLM_FALSO_VERIFICA="otro")
+    assert r.returncode == 0, r.stderr
+    textos = [json.loads(x)["texto"] for x in avisos.read_text(encoding="utf-8").splitlines()]
+    revisar = [t for t in textos if "Revisar" in t]
+    assert revisar, "el «incumple» se sigue avisando aunque el texto de la iniciativa diga otra cosa"
+    assert any("parece decidir otra cosa" in t for t in revisar)

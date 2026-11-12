@@ -26,7 +26,7 @@ COMPROBAR = ("Antes de confirmar, abre la iniciativa y comprueba (el título no 
              "Si dudas en cualquiera, no lo confirmes: queda en «Juzga tú».")
 
 
-def mensaje_revision(c: dict, p: dict, v: dict, confirmar: dict) -> str:
+def mensaje_revision(c: dict, p: dict, v: dict, confirmar: dict, nota_texto: str | None = None) -> str:
     """El aviso lleva el texto de la iniciativa y la sesión: confirmar solo con el título repetía el error del
     juez (revisión del 2026-11-11: 4 de los 6 «incumple» confirmados no se sostenían al leer la iniciativa)."""
     enlaces = [f"Iniciativa (BOCG): {v.get('url_bocg') or 'sin enlace, búscala por el título'}",
@@ -34,6 +34,8 @@ def mensaje_revision(c: dict, p: dict, v: dict, confirmar: dict) -> str:
     if v.get("url_boe"):
         enlaces.append(f"BOE: {v['url_boe']}")
     nota = f"\n⚠️ {v['mezcla']['motivo']}" if v.get("mezcla") else ""
+    if nota_texto:                           # paso `verificar`: lo que el modelo vio en el texto del BOCG
+        nota += f"\n🔎 {nota_texto}"
     return (f"<b>Revisar «incumple»: {c['partido']}</b>\n{v['fecha']} · {v.get('tipo', '')}\n"
             f"{v['expediente'][:300]}{nota}\n"
             f"Votó {c['voto']}. Promesa: {p['texto']}\n«{p['cita']}» ({p['url_programa_pagina']})\n\n"
@@ -47,6 +49,8 @@ def avisar(conn, datos: dict) -> int:
     prom = {p["id"]: p for p in datos["promesas"]}
     vots = {v["id"]: v for v in datos["votaciones"]}
     hechos = {(r[0], r[1], r[2]) for r in conn.execute("SELECT votacion_id, promesa_id, partido FROM avisos")}
+    from src.electoral import verificar
+    notas = verificar.notas(conn)
     n = 0
     for c in datos["cruces"]:
         clave = (c["votacion_id"], c["promesa_id"], c["partido"])
@@ -54,7 +58,7 @@ def avisar(conn, datos: dict) -> int:
             continue
         p, v = prom[c["promesa_id"]], vots[c["votacion_id"]]
         confirmar = dict(zip(("votacion_id", "promesa_id", "partido"), clave)) | {"veredicto": "incumple"}
-        _enviar(mensaje_revision(c, p, v, confirmar))
+        _enviar(mensaje_revision(c, p, v, confirmar, notas.get(clave)))
         conn.execute("INSERT INTO avisos VALUES (?,?,?, datetime('now'))", clave)
         conn.commit()
         n += 1

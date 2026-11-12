@@ -52,10 +52,12 @@ def _temas(promesas: list[dict]) -> dict:
     return dict(salida)
 
 
-def _cruces(conn, confirmados: set, descartados: set = frozenset()) -> list[dict]:
+def _cruces(conn, confirmados: set, descartados: set = frozenset(), verificaciones=None) -> list[dict]:
     """El nivel se recalcula aquí con el voto y el «dividido» actuales: corregir los datos de votos no deja
-    veredictos obsoletos."""
-    from src.electoral import juez
+    veredictos obsoletos. `verificaciones`: cruces que el contenido de la iniciativa no sostiene (por defecto,
+    los que haya guardado el paso `verificar`; si nunca ha corrido, ninguno)."""
+    from src.electoral import juez, verificar
+    no_sostenidos = verificar.no_sostenidos(conn) if verificaciones is None else set(verificaciones)
     salida = []
     for c in conn.execute("""SELECT c.*, vp.voto, vp.dividido, v.subtipo, v.tipo, v.expediente FROM cruces c
                              JOIN votos_partido vp ON vp.votacion_id = c.votacion_id AND vp.partido = c.partido
@@ -77,6 +79,10 @@ def _cruces(conn, confirmados: set, descartados: set = frozenset()) -> list[dict
             res = ("juzga_tu", res[1])         # por una enmienda suelta se cuelan asuntos ajenos a la ley
         clave = (c["votacion_id"], c["promesa_id"], c["partido"], res[1])
         revisado = clave in confirmados
+        # El texto de la iniciativa no decide lo prometido (paso `verificar`): no es veredicto ni pide revisión.
+        # Lo que una persona confirmó leyendo la iniciativa manda sobre el modelo.
+        if res[0] == "veredicto" and not revisado and clave[:3] in no_sostenidos:
+            res = ("juzga_tu", res[1])
         # Un incumple solo se afirma revisado a mano: el juez ve el titulo, no el contenido de la iniciativa.
         pendiente = res == ("veredicto", "incumple") and not revisado
         if pendiente:

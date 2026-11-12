@@ -37,6 +37,12 @@ def transporte(body):
     if "MEZCLA:" in usuario:                          # ¿la norma toca asuntos ajenos a su título?
         si = bool(os.environ.get("LLM_FALSO_MEZCLA"))
         return _resp({"mezcla": si, "ajenos": ["la cesión de un palacio en París"] if si else []})
+    if "VERIFICAR:" in usuario:                       # ¿el texto de la iniciativa decide lo que promete el programa?
+        if os.environ.get("LLM_FALSO_VERIFICA") == "falla":
+            return {"choices": [{"message": {"content": "no es json"}}], "usage": {"cost": COSTE}}
+        ids = [int(i) for i in re.findall(r"\[id=(\d+)\]", usuario)]
+        return _resp({"promesas": [{"id": i, "objeto": os.environ.get("LLM_FALSO_VERIFICA", "mismo"),
+                                    "mezcla": bool(os.environ.get("LLM_FALSO_VERIFICA_MEZCLA")), "por_que": "prueba"} for i in ids]})
     if "ADIVINAR:" in usuario:                        # test a ciegas: ¿de qué partido es este resumen?
         if os.environ.get("LLM_FALSO_FALLA_SI_VE_PROGRAMA") and ("CITA" in usuario or "TEXTO DEL PROGRAMA" in usuario):
             return {"choices": [{"message": {"content": "no es json"}}], "usage": {"cost": COSTE}}

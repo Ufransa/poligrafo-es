@@ -54,6 +54,15 @@ Cada paso es reanudable: si un tope de gasto corta la carga, se vuelve a lanzar 
 
    Revisión del 2026-11-11 leyendo el contenido real: 4 de los 6 «incumple» confirmados solo con el título no se
    sostenían (pasaron a «juzga tú») y 2 «cumple» se retiraron por tratar otro objeto.
+8. **Segunda pasada con el texto de la iniciativa** (`python electoral.py verificar --tope 0.1`). Un modelo barato
+   lee el arranque del texto en el BOCG y los títulos de sus artículos, y dice si la iniciativa decide lo prometido
+   o solo toca la misma ley. Un «cumple» firme en el que, en las dos pasadas, decide otra cosa baja a «juzga tú».
+   Un «incumple» nunca se baja: lo que el modelo vea va como nota en el aviso de revisión. Sin texto en el BOCG
+   (PNL, mociones) no decide. No cambia el juez ni su huella; guarda su resultado en la tabla `verificaciones`.
+   La noche lo lanza con tope de 0,05 $; si falla, publica igual y avisa. Medición del 2026-11-12 sobre 194
+   veredictos: bajaron 5 «cumple» dudosos y 2 que prometían 20 semanas de permiso frente a las 19 del RDL 9/2025;
+   no cambió el sentido de ningún caso de referencia. No detecta todo: una iniciativa que reforma la misma ley con
+   otro fin puede pasar, y eso sigue dependiendo de la revisión a mano.
 
 ### Cuánto acierta
 
