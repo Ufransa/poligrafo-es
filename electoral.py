@@ -142,6 +142,23 @@ def cmd_muestra(a, conn):
     print(f"{min(a.n, len(veredictos))} casos en {a.salida}")
 
 
+def cmd_muestra_promesas(a, conn):
+    """Muestra reproducible de propuestas de un año para revisarlas a mano antes de publicarlas en la web."""
+    promesas = sorted((p for p in exportar.construir(conn, RAIZ)["promesas"] if p["anio"] == a.anio), key=lambda p: p["id"])
+    random.Random(a.semilla).shuffle(promesas)
+    L = [f"# Muestra de propuestas de {a.anio} para revisar antes de publicar", "",
+         "Marca una casilla por propuesta. Si algo falla, escribe por qué en «Nota».", ""]
+    for n, p in enumerate(promesas[: a.n], 1):
+        L += [f"## {n}. {p['partido']} · {p['tema']}", "",
+              f"- **Resumen:** {p['texto']}",
+              f"- **Cita literal:** «{p['cita']}»",
+              f"- **Programa:** [pág. {p['pagina']}]({p['url_programa_pagina']})", "",
+              "- [ ] Bien", "- [ ] Resumen no dice lo que dice la cita", "- [ ] Tema mal puesto o no es una propuesta",
+              "- Nota: ", ""]
+    Path(a.salida).write_text("\n".join(L), encoding="utf-8")
+    print(f"{min(a.n, len(promesas))} propuestas en {a.salida}")
+
+
 def cmd_todo(a, conn):
     for paso, args in (("descargar", []), ("fuentes", []), ("extraer", ["--tope", str(a.tope_extraer)]),
                        ("juzgar", ["--tope", str(a.tope_juzgar)]), ("exportar", [])):
@@ -202,7 +219,7 @@ def cmd_exportar(a, conn):
 def main(argv=None):
     p = argparse.ArgumentParser(prog="electoral")
     sub = p.add_subparsers(dest="cmd", required=True)
-    for nombre in ("descargar", "fuentes", "ingest-programa", "extraer", "juzgar", "exportar", "muestra", "todo", "noche", "mezclas", "verificar",
+    for nombre in ("descargar", "fuentes", "ingest-programa", "extraer", "juzgar", "exportar", "muestra", "muestra-promesas", "todo", "noche", "mezclas", "verificar",
                    "test-seleccionar", "test-resumir", "test-neutralidad",
                    "test-revision", "test-aprobar"):
         s = sub.add_parser(nombre)
@@ -221,6 +238,10 @@ def main(argv=None):
     sub.choices["muestra"].add_argument("--n", type=int, default=30)
     sub.choices["muestra"].add_argument("--semilla", type=int, default=29)
     sub.choices["muestra"].add_argument("--salida", default=str(RAIZ / "docs" / "revision_muestra.md"))
+    sub.choices["muestra-promesas"].add_argument("--anio", type=int, default=2026)
+    sub.choices["muestra-promesas"].add_argument("--n", type=int, default=30)
+    sub.choices["muestra-promesas"].add_argument("--semilla", type=int, default=29)
+    sub.choices["muestra-promesas"].add_argument("--salida", default=str(RAIZ / "docs" / "revision_promesas_2026.md"))
     sub.choices["todo"].add_argument("--tope-extraer", type=float, default=1.0)
     sub.choices["todo"].add_argument("--tope-juzgar", type=float, default=4.0)
     sub.choices["fuentes"].add_argument("--boe", help="JSON clave -> identificador BOE (por defecto, API del BOE)")
@@ -252,7 +273,7 @@ def main(argv=None):
     sub.choices["exportar"].add_argument("--test-anio", type=int, default=2026, help="año de programas del test que se publica")
     a = p.parse_args(argv)
     conn = edb.conectar(Path(a.db))
-    {"descargar": cmd_descargar, "ingest-programa": cmd_ingest, "extraer": cmd_extraer, "juzgar": cmd_juzgar, "fuentes": cmd_fuentes, "muestra": cmd_muestra, "todo": cmd_todo,
+    {"descargar": cmd_descargar, "ingest-programa": cmd_ingest, "extraer": cmd_extraer, "juzgar": cmd_juzgar, "fuentes": cmd_fuentes, "muestra": cmd_muestra, "muestra-promesas": cmd_muestra_promesas, "todo": cmd_todo,
      "exportar": cmd_exportar, "noche": cmd_noche, "mezclas": cmd_mezclas, "verificar": cmd_verificar,
      "test-seleccionar": cmd_test_seleccionar, "test-resumir": cmd_test_resumir,
      "test-neutralidad": cmd_test_neutralidad,
