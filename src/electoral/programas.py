@@ -121,7 +121,7 @@ def extraer(conn, llm) -> None:
     pendientes = conn.execute("SELECT * FROM bloques WHERE extraido = 0").fetchall()
 
     def uno(b):
-        out = llm.json(MODELO_EXTRACCION, SISTEMA, f"Partido: {b['partido']}\n\nFRAGMENTO:\n{b['texto']}", max_tokens=3000)
+        out = llm.json(MODELO_EXTRACCION, SISTEMA, f"Partido: {b['partido']}\n\nFRAGMENTO:\n{b['texto']}", max_tokens=6000)  # 3000 truncaba bloques densos: 30+ promesas (Compromís 2026, p. 17)
         return b, out
 
     with ThreadPoolExecutor(8) as ex:
