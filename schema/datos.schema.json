@@ -21,7 +21,15 @@
         "generado",
         "periodo",
         "recuentos"
-      ]
+      ],
+      "properties": {
+        "temas": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     "partidos": {
       "type": "array",
@@ -41,6 +49,18 @@
             ]
           },
           "sin_programa": {
+            "type": "string"
+          },
+          "programa_2026": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sin_programa_2026": {
+            "type": "string"
+          },
+          "url_sin_programa_2026": {
             "type": "string"
           }
         }

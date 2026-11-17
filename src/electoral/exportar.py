@@ -8,9 +8,9 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-from src.electoral import analisis, mezclas, votaciones
+from src.electoral import analisis, mezclas, programas, votaciones
 
-VERSION_CONTRATO = "1.3.0"
+VERSION_CONTRATO = "1.4.0"
 
 
 def _votaciones(conn) -> list[dict]:
@@ -162,6 +162,7 @@ def construir(conn, raiz: Path, revision: Path | None = None, test_ciegas: Path 
             "periodo": {"desde": "2023-08-17", "hasta": max((v["fecha"] for v in votaciones), default=None)},
             "recuentos": {"votaciones": len(votaciones), "promesas": len(promesas),
                           "veredictos": sum(c["nivel"] == "veredicto" for c in cruces)},
+            "temas": list(programas.TEMAS),
         },
         "partidos": partidos,
         "votaciones": votaciones,

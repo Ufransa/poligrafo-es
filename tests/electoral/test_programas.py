@@ -56,3 +56,18 @@ def test_si_se_agota_el_presupuesto_la_extraccion_se_reanuda_sin_duplicar(cli):
     cli("extraer", env=_env())
     textos = [p["texto"] for p in cli("exportar")["promesas"]]
     assert len(textos) == len(set(textos)) == 2
+
+
+def test_cada_partido_tiene_programa_de_2026_o_el_motivo(cli):
+    partidos = cli("exportar")["partidos"]
+    for p in partidos:
+        assert bool(p.get("programa_2026")) != bool(p.get("sin_programa_2026")), p["id"]
+    podemos = next(p for p in partidos if p["id"] == "Podemos")
+    assert podemos["sin_programa_2026"] == "Solo publica un manifiesto breve, sin propuestas concretas."
+    assert podemos["url_sin_programa_2026"] == "https://pazcasaytrabajo.es/"
+
+
+def test_el_contrato_lleva_la_lista_de_temas(cli):
+    meta = cli("exportar")["meta"]
+    assert meta["version_contrato"] == "1.4.0"
+    assert len(meta["temas"]) == 17 and meta["temas"][0] == "Vivienda"
