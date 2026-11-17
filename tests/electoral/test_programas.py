@@ -20,6 +20,15 @@ def test_cada_promesa_lleva_cita_pagina_y_enlace_a_esa_pagina(cli):
     assert alquiler["url_programa_pagina"].endswith("#page=1")
 
 
+def test_un_pdf_local_puede_enlazar_a_su_url_oficial(cli):
+    # Webs que bloquean a los robots (Incapsula, 403): se baja a mano y se enlaza la fuente oficial, no file:///.
+    oficial = "https://partido.example/programa-2026.pdf"
+    cli("ingest-programa", "2023", "PSOE", str(FIX / "programa_prueba.pdf"), "--url", oficial, env=_env())
+    cli("extraer", env=_env())
+    psoe = [p for p in cli("exportar")["promesas"] if p["partido"] == "PSOE"]
+    assert psoe and all(p["url_programa_pagina"].startswith(oficial + "#page=") for p in psoe)
+
+
 def test_las_promesas_de_procedimiento_no_se_exportan(cli):
     cli("ingest-programa", "2023", "PSOE", str(FIX / "programa_prueba.pdf"), env=_env())
     cli("extraer", env=_env())

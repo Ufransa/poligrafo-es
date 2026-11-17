@@ -104,8 +104,9 @@ def pagina_de_cita(cita: str, texto_bloque: str) -> int | None:
     return None
 
 
-def ingerir(conn, anio: int, partido: str, origen: str) -> int:
-    url = origen if not Path(origen).exists() else Path(origen).resolve().as_uri()
+def ingerir(conn, anio: int, partido: str, origen: str, url: str | None = None) -> int:
+    """`url`: fuente oficial que se enlaza cuando el PDF se ha bajado a mano (webs que bloquean a los robots)."""
+    url = url or (origen if not Path(origen).exists() else Path(origen).resolve().as_uri())
     n = 0
     for pagina, texto in bloques_por_pagina(leer_pdf(origen)):
         cur = conn.execute("INSERT OR IGNORE INTO bloques (partido, anio, pagina, texto, url_programa) VALUES (?,?,?,?,?)",

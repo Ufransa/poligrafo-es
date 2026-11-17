@@ -27,7 +27,7 @@ def cmd_descargar(a, conn):
 
 
 def cmd_ingest(a, conn):
-    print(programas.ingerir(conn, int(a.anio), a.partido, a.origen), "bloques nuevos")
+    print(programas.ingerir(conn, int(a.anio), a.partido, a.origen, a.url), "bloques nuevos")
 
 
 def cmd_extraer(a, conn):
@@ -209,6 +209,7 @@ def main(argv=None):
         s.add_argument("--db", default=str(RAIZ / "electoral.db"))
     for arg in ("anio", "partido", "origen"):
         sub.choices["ingest-programa"].add_argument(arg)
+    sub.choices["ingest-programa"].add_argument("--url", help="URL oficial que se enlaza cuando el PDF se ha bajado a mano")
     sub.choices["extraer"].add_argument("--tope", type=float, default=1.0)
     sub.choices["juzgar"].add_argument("--tope", type=float, default=4.0)
     sub.choices["juzgar"].add_argument("--k", type=int, default=20)
