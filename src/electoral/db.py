@@ -68,6 +68,10 @@ def conectar(ruta: Path) -> sqlite3.Connection:
         conn.execute("ALTER TABLE test_propuestas ADD COLUMN territorial INTEGER DEFAULT 0")
     except sqlite3.OperationalError:
         pass
+    try:                                          # resumen ya pasado a castellano (2026-11-17: ~70 en catalán o gallego)
+        conn.execute("ALTER TABLE promesas ADD COLUMN lengua_ok INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
     conn.execute("CREATE TABLE IF NOT EXISTS boe (clave TEXT PRIMARY KEY, identificador TEXT)")
     conn.execute("CREATE TABLE IF NOT EXISTS mezclas (identificador TEXT PRIMARY KEY, mezcla INTEGER, ajenos TEXT)")
     return conn

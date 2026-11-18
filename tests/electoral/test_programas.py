@@ -71,3 +71,14 @@ def test_el_contrato_lleva_la_lista_de_temas(cli):
     meta = cli("exportar")["meta"]
     assert meta["version_contrato"] == "1.4.0"
     assert len(meta["temas"]) == 17 and meta["temas"][0] == "Vivienda"
+
+
+def test_los_resumenes_de_2026_salen_en_castellano_aunque_el_programa_no_lo_este(cli):
+    # Revisión del 2026-11-17: ~70 resúmenes de ERC, BNG y Compromís salían en catalán o gallego.
+    env = _env(LLM_FALSO_CATALAN="1")
+    cli("ingest-programa", "2026", "ERC", str(FIX / "programa_prueba.pdf"), env=env)
+    cli("extraer", env=env)
+    erc = [p for p in cli("exportar")["promesas"] if p["partido"] == "ERC"]
+    assert erc and not any("habitatge" in p["texto"] for p in erc)
+    assert any("vivienda" in p["texto"] for p in erc)
+    assert all("habitatge" not in p["cita"] for p in erc)          # la cita sigue siendo literal

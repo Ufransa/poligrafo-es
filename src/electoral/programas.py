@@ -145,3 +145,39 @@ def extraer(conn, llm) -> None:
                              (b["id"], b["partido"], b["anio"], pagina, p["promesa"], cita, tema, int(bool(p.get("procedimental")))))
             conn.execute("UPDATE bloques SET extraido = 1 WHERE id = ?", (b["id"],))
             conn.commit()
+
+
+SISTEMA_CASTELLANO = """Recibes resúmenes de propuestas electorales, uno por línea con su [id=N].
+Si un resumen no está en castellano (por ejemplo, en catalán, gallego o euskera), tradúcelo fielmente al castellano,
+sin añadir ni quitar nada. Si ya está en castellano, devuélvelo idéntico.
+Responde SOLO con JSON: {"textos": [{"id": int, "texto": str}]}"""
+LOTE_CASTELLANO = 40
+
+
+def castellanizar(conn, llm) -> int:
+    """Pasa a castellano los resúmenes de 2026 en otra lengua (el extractor a veces no traduce). Solo 2026: cambiar
+    un texto de 2023 alteraría veredictos ya publicados. Un texto que cambia pierde su embedding para recalcularse.
+    Reanudable: cada propuesta se marca al recibir respuesta. Devuelve cuántos textos cambiaron."""
+    pendientes = conn.execute("SELECT id, texto FROM promesas WHERE anio >= 2026 AND procedimental = 0 "
+                              "AND NOT lengua_ok ORDER BY id").fetchall()
+    cambiados = 0
+    for i in range(0, len(pendientes), LOTE_CASTELLANO):
+        lote = pendientes[i:i + LOTE_CASTELLANO]
+        try:
+            out = llm.json(MODELO_EXTRACCION, SISTEMA_CASTELLANO,
+                           "CASTELLANO:\n" + "\n".join(f"[id={p['id']}] {p['texto']}" for p in lote), max_tokens=6000)
+        except PresupuestoAgotado:
+            break
+        if out is None:
+            continue
+        originales = {p["id"]: p["texto"] for p in lote}
+        for t in out.get("textos", []):
+            pid, texto = t.get("id"), (t.get("texto") or "").strip()
+            if pid not in originales or not texto:
+                continue
+            if texto != originales[pid]:
+                conn.execute("UPDATE promesas SET texto = ?, embedding = NULL WHERE id = ?", (texto, pid))
+                cambiados += 1
+            conn.execute("UPDATE promesas SET lengua_ok = 1 WHERE id = ?", (pid,))
+        conn.commit()
+    return cambiados

@@ -25,11 +25,15 @@ def transporte(body):
         for trozo in usuario.split("PROMESA:")[1:]:      # el bloque llega en una sola línea
             texto = re.sub(r"\[\[p\. \d+\]\]", "", trozo.split(" Hemos")[0]).strip()
             if texto:
-                promesas.append({"promesa": texto, "cita": texto, "tema": "Vivienda" if "alquiler" in texto else "Instituciones y calidad democrática",
+                resumen = f"Construirem habitatge: {texto}" if os.environ.get("LLM_FALSO_CATALAN") else texto
+                promesas.append({"promesa": resumen, "cita": texto, "tema": "Vivienda" if "alquiler" in texto else "Instituciones y calidad democrática",
                                  "procedimental": "real decreto" in texto.lower()})
         if os.environ.get("LLM_FALSO_CITA_FALSA"):
             promesas.append({"promesa": "Promesa inventada", "cita": "Esta frase no aparece en ningún programa", "tema": "Vivienda", "procedimental": False})
         return _resp({"promesas": promesas})
+    if "CASTELLANO:" in usuario:                      # resúmenes que no están en castellano
+        pares = re.findall(r"\[id=(\d+)\] (.*)", usuario)
+        return _resp({"textos": [{"id": int(i), "texto": t.replace("Construirem habitatge", "Construiremos vivienda")} for i, t in pares]})
     if "SELECCIONAR:" in usuario:                     # test a ciegas: selección
         ids = [int(i) for i in re.findall(r"\[id=(\d+)\]", usuario)]
         modo = os.environ.get("LLM_FALSO_SELECCION", "")

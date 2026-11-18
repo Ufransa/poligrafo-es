@@ -33,6 +33,7 @@ def cmd_ingest(a, conn):
 def cmd_extraer(a, conn):
     llm = LLM(a.tope)
     programas.extraer(conn, llm)
+    print(programas.castellanizar(conn, llm), "resúmenes pasados a castellano")
     conn.execute("INSERT INTO gasto (fecha, paso, usd) VALUES (datetime('now'), 'extraer', ?)", (llm.gastado,))
     conn.commit()
     print(f"gastado {llm.gastado:.4f} $")
